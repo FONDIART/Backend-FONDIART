@@ -1,0 +1,52 @@
+from django.urls import path
+from .views import (
+    RegisterView,
+    LoginView,
+    MeView,
+    UserUpdateMeView,
+    ArtworkListView,
+    ArtworkCreateView,
+    ArtworkRecommendedView,
+    ArtworkDetailView,
+    ArtworkUpdateView,
+    ArtworkRatingView,
+    ArtworkRateView,
+    MyArtworksView,
+    ArtworkStatsView,
+    AdminArtworkListView,
+    AdminArtworkStatusUpdateView,
+    OrderCreateView,
+    OrderListView,
+    OrderDetailView,
+    FavoriteCreateView,
+    FavoriteDeleteView,
+    MyFavoritesView,
+)
+
+urlpatterns = [
+    path('auth/register/', RegisterView.as_view(), name='auth-register'),
+    path('auth/login/', LoginView.as_view(), name='auth-login'),
+    path('auth/me/', MeView.as_view(), name='auth-me'),
+    path('users/me/', UserUpdateMeView.as_view(), name='user-update-me'),
+
+    path('artworks/', ArtworkListView.as_view(), name='artwork-list'),
+    path('artworks/create/', ArtworkCreateView.as_view(), name='artwork-create'),
+    path('artworks/recommended/', ArtworkRecommendedView.as_view(), name='artwork-recommended'),
+    path('artworks/<int:pk>/', ArtworkDetailView.as_view(), name='artwork-detail'),
+    path('artworks/<int:pk>/update/', ArtworkUpdateView.as_view(), name='artwork-update'),
+    path('artworks/<int:pk>/rating/', ArtworkRatingView.as_view(), name='artwork-rating'),
+    path('artworks/<int:pk>/rate/', ArtworkRateView.as_view(), name='artwork-rate'),
+    path('me/artworks/', MyArtworksView.as_view(), name='my-artworks'),
+    path('artworks/<int:pk>/stats/', ArtworkStatsView.as_view(), name='artwork-stats'),
+
+    path('admin/artworks/', AdminArtworkListView.as_view(), name='admin-artwork-list'),
+    path('admin/artworks/<int:pk>/status/', AdminArtworkStatusUpdateView.as_view(), name='admin-artwork-status-update'),
+
+    path('orders/create/', OrderCreateView.as_view(), name='order-create'),
+    path('orders/list/', OrderListView.as_view(), name='order-list'),
+    path('orders/<int:pk>/', OrderDetailView.as_view(), name='order-detail'),
+
+    path('artworks/<int:pk>/favorite/create/', FavoriteCreateView.as_view(), name='favorite-create'),
+    path('artworks/<int:pk>/favorite/delete/', FavoriteDeleteView.as_view(), name='favorite-delete'),
+    path('me/favorites/', MyFavoritesView.as_view(), name='my-favorites'),
+]

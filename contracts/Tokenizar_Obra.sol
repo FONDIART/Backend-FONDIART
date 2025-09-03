@@ -45,7 +45,7 @@ contract CuadroToken is ERC20, Ownable {
         require(balanceOf(artista) == 0 && balanceOf(plataforma) == 0, "Los tokens ya han sido distribuidos.");
         
         uint256 totalTokens = balanceOf(owner());
-        uint256 tokensArtista = (totalTokens * 40) / 100;
+        uint256 tokensArtista = (totalTokens * 60) / 100;
         uint256 tokensPlataforma = (totalTokens * 10) / 100;
 
         _transfer(owner(), artista, tokensArtista);

@@ -6,7 +6,7 @@ GANACHE_URL = "http://127.0.0.1:8545"
 web3 = Web3(Web3.HTTPProvider(GANACHE_URL))
 
 # Deployed contract address
-CONTRACT_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3"
+CONTRACT_ADDRESS = "0x9A676e781A523b5d0C0e43731313A708CB607508"
 
 # Absolute path to the contract ABI
 ABI_PATH = "/Users/jorgeantoniosegovia/codigo/backend-Fondiart/artifacts/contracts/Tokenizar_Obra.sol/CuadroToken.json"
@@ -25,9 +25,9 @@ def get_info():
         "nombre_cuadro": contract.functions.nombreCuadro().call(),
         "autor": contract.functions.autor().call(),
         "anio_creacion": contract.functions.anioCreacion().call(),
-        "artista": contract.functions.artista().call(),
-        "plataforma": contract.functions.plataforma().call(),
-        "total_supply": contract.functions.totalSupply().call(),
+        "artista": str(contract.functions.artista().call()),
+        "plataforma": str(contract.functions.plataforma().call()),
+        "total_supply": str(contract.functions.totalSupply().call()),
     }
     return info
 
@@ -49,4 +49,4 @@ def certificar_propiedad(nuevo_propietario, cantidad):
 def get_balance(address):
     contract = get_contract()
     balance = contract.functions.balanceOf(address).call()
-    return balance
+    return str(balance)

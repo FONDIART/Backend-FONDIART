@@ -4,7 +4,8 @@ from .views import (
     ContractInfoView, 
     DistribuirTokensView, 
     CertificarPropiedadView, 
-    BalanceView
+    BalanceView,
+    HardhatWalletView
 )
 
 urlpatterns = [
@@ -13,4 +14,5 @@ urlpatterns = [
     path('contract/distribuir/', DistribuirTokensView.as_view(), name='distribuir-tokens'),
     path('contract/certificar/', CertificarPropiedadView.as_view(), name='certificar-propiedad'),
     path('contract/balance/', BalanceView.as_view(), name='contract-balance'),
+    path('hardhat-wallet/', HardhatWalletView.as_view(), name='hardhat-wallet'),
 ]
