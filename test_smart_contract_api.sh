@@ -138,17 +138,17 @@ register_and_login
 # --- Token Distribution and Transfer ---
 
 echo -e "\n--- Initial Token Balances ---"
-test_endpoint "/api/contract/balance/?address=$OWNER_ADDRESS" "GET" "" "" "Owner Balance"
-test_endpoint "/api/contract/balance/?address=$ARTIST_ADDRESS" "GET" "" "" "Artist Balance"
-test_endpoint "/api/contract/balance/?address=$PLATFORM_ADDRESS" "GET" "" "" "Platform Balance"
+test_endpoint "/api/contract/balance/?address=$OWNER_ADDRESS" "GET" "" "Authorization: Bearer $JWT_TOKEN" "Owner Balance"
+test_endpoint "/api/contract/balance/?address=$ARTIST_ADDRESS" "GET" "" "Authorization: Bearer $JWT_TOKEN" "Artist Balance"
+test_endpoint "/api/contract/balance/?address=$PLATFORM_ADDRESS" "GET" "" "Authorization: Bearer $JWT_TOKEN" "Platform Balance"
 
 echo -e "\n--- Distributing Initial Tokens ---"
 test_endpoint "/api/contract/distribuir/" "POST" "{}" "Authorization: Bearer $JWT_TOKEN" "Distribute Tokens"
 
 echo -e "\n--- Balances After Distribution ---"
-test_endpoint "/api/contract/balance/?address=$OWNER_ADDRESS" "GET" "" "" "Owner Balance"
-test_endpoint "/api/contract/balance/?address=$ARTIST_ADDRESS" "GET" "" "" "Artist Balance"
-test_endpoint "/api/contract/balance/?address=$PLATFORM_ADDRESS" "GET" "" "" "Platform Balance"
+test_endpoint "/api/contract/balance/?address=$OWNER_ADDRESS" "GET" "" "Authorization: Bearer $JWT_TOKEN" "Owner Balance"
+test_endpoint "/api/contract/balance/?address=$ARTIST_ADDRESS" "GET" "" "Authorization: Bearer $JWT_TOKEN" "Artist Balance"
+test_endpoint "/api/contract/balance/?address=$PLATFORM_ADDRESS" "GET" "" "Authorization: Bearer $JWT_TOKEN" "Platform Balance"
 
 echo -e "\n--- Certifying Ownership to 3 Clients ---"
 test_endpoint "/api/contract/certificar/" "POST" '{"nuevo_propietario": "'$CLIENT_1_ADDRESS'", "cantidad": '$TOKEN_AMOUNT_PER_CLIENT'}' "Authorization: Bearer $JWT_TOKEN" "Certify Ownership to Client 1"
@@ -156,12 +156,9 @@ test_endpoint "/api/contract/certificar/" "POST" '{"nuevo_propietario": "'$CLIEN
 test_endpoint "/api/contract/certificar/" "POST" '{"nuevo_propietario": "'$CLIENT_3_ADDRESS'", "cantidad": '$TOKEN_AMOUNT_PER_CLIENT'}' "Authorization: Bearer $JWT_TOKEN" "Certify Ownership to Client 3"
 
 echo -e "\n--- Final Balances ---"
-test_endpoint "/api/contract/balance/?address=$OWNER_ADDRESS" "GET" "" "" "Owner Balance"
-test_endpoint "/api/contract/balance/?address=$CLIENT_1_ADDRESS" "GET" "" "" "Client 1 Balance"
-test_endpoint "/api/contract/balance/?address=$CLIENT_2_ADDRESS" "GET" "" "" "Client 2 Balance"
-test_endpoint "/api/contract/balance/?address=$CLIENT_3_ADDRESS" "GET" "" "" "Client 3 Balance"
+test_endpoint "/api/contract/balance/?address=$OWNER_ADDRESS" "GET" "" "Authorization: Bearer $JWT_TOKEN" "Owner Balance"
+test_endpoint "/api/contract/balance/?address=$CLIENT_1_ADDRESS" "GET" "" "Authorization: Bearer $JWT_TOKEN" "Client 1 Balance"
+test_endpoint "/api/contract/balance/?address=$CLIENT_2_ADDRESS" "GET" "" "Authorization: Bearer $JWT_TOKEN" "Client 2 Balance"
+test_endpoint "/api/contract/balance/?address=$CLIENT_3_ADDRESS" "GET" "" "Authorization: Bearer $JWT_TOKEN" "Client 3 Balance"
 
 echo -e "\n--- All operations completed. ---"
-
-
-
