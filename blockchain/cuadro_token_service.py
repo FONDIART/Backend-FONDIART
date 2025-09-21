@@ -6,7 +6,7 @@ GANACHE_URL = "http://127.0.0.1:8545"
 web3 = Web3(Web3.HTTPProvider(GANACHE_URL))
 
 # Deployed contract address
-CONTRACT_ADDRESS = "0x8f86403A4DE0BB5791fa46B8e795C547942fE4Cf"
+CONTRACT_ADDRESS = "0xFD471836031dc5108809D173A067e8486B9047A3"
 
 # Absolute path to the contract ABI
 ABI_PATH = "/Users/jorgeantoniosegovia/codigo/backend-Fondiart/artifacts/contracts/Tokenizar_Obra.sol/CuadroToken.json"
