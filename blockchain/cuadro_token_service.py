@@ -1,12 +1,21 @@
 import json
+import os
 from web3 import Web3
+from dotenv import load_dotenv
 
-# Hardhat node URL
-GANACHE_URL = "http://127.0.0.1:8545"
-web3 = Web3(Web3.HTTPProvider(GANACHE_URL))
+load_dotenv()
 
-# Deployed contract address
+# Sepolia RPC URL from .env file
+SEPOLIA_RPC_URL = os.getenv("SEPOLIA_RPC_URL")
+web3 = Web3(Web3.HTTPProvider(SEPOLIA_RPC_URL))
+
+# Deployed contract address - IMPORTANT: This needs to be updated with the address of the contract deployed on Sepolia
 CONTRACT_ADDRESS = "0xFD471836031dc5108809D173A067e8486B9047A3"
+
+# Private key from .env file for signing transactions
+PRIVATE_KEY = os.getenv("PRIVATE_KEY")
+owner = web3.eth.account.from_key(PRIVATE_KEY).address
+
 
 # Absolute path to the contract ABI
 ABI_PATH = "/Users/jorgeantoniosegovia/codigo/backend-Fondiart/artifacts/contracts/Tokenizar_Obra.sol/CuadroToken.json"
@@ -33,16 +42,33 @@ def get_info():
 
 def distribuir_tokens():
     contract = get_contract()
-    # The owner is the deployer of the contract, which is the first account in Hardhat
-    owner = web3.eth.accounts[0]
-    tx_hash = contract.functions.distribuirTokensIniciales().transact({'from': owner})
+    
+    nonce = web3.eth.get_transaction_count(owner)
+    tx = contract.functions.distribuirTokensIniciales().build_transaction({
+        'from': owner,
+        'nonce': nonce,
+        'gas': 2000000,
+        'gasPrice': web3.eth.gas_price,
+    })
+    
+    signed_tx = web3.eth.account.sign_transaction(tx, PRIVATE_KEY)
+    tx_hash = web3.eth.send_raw_transaction(signed_tx.rawTransaction)
     receipt = web3.eth.wait_for_transaction_receipt(tx_hash)
     return receipt
 
 def certificar_propiedad(nuevo_propietario, cantidad):
     contract = get_contract()
-    owner = web3.eth.accounts[0]
-    tx_hash = contract.functions.certificarPropiedad(nuevo_propietario, cantidad).transact({'from': owner})
+
+    nonce = web3.eth.get_transaction_count(owner)
+    tx = contract.functions.certificarPropiedad(nuevo_propietario, cantidad).build_transaction({
+        'from': owner,
+        'nonce': nonce,
+        'gas': 2000000,
+        'gasPrice': web3.eth.gas_price,
+    })
+
+    signed_tx = web3.eth.account.sign_transaction(tx, PRIVATE_KEY)
+    tx_hash = web3.eth.send_raw_transaction(signed_tx.rawTransaction)
     receipt = web3.eth.wait_for_transaction_receipt(tx_hash)
     return receipt
 

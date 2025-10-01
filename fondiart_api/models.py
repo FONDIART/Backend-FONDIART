@@ -10,11 +10,18 @@ class User(AbstractUser):
         ('admin', 'Admin'),
     )
     name = models.CharField(max_length=255, blank=True) # Add name field
+    dni = models.CharField(max_length=20, blank=True, null=True) # Add dni field
+    email = models.EmailField(unique=True) # Ensure email is unique
     role = models.CharField(max_length=10, choices=ROLE_CHOICES, default='buyer')
     avatarUrl = models.URLField(max_length=200, blank=True, null=True)
     # Add related_name to avoid clashes with auth.User
     groups = models.ManyToManyField(Group, related_name='fondiart_users', blank=True)
     user_permissions = models.ManyToManyField(Permission, related_name='fondiart_users_permissions', blank=True)
+    phone = models.CharField(max_length=255, blank=True) # Add name field
+    bio = models.TextField(blank=True, null=True) # Add bio field
+    
+    
+
 
     def __str__(self):
         return self.email
@@ -100,3 +107,23 @@ class Favorite(models.Model):
 
     def __str__(self):
         return f"{self.user.email} favorited {self.artwork.title}"
+
+# Wallet Model
+class Wallet(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='wallet')
+    address = models.CharField(max_length=42, unique=True)
+    private_key = models.CharField(max_length=64)
+    name = models.CharField(max_length=255, blank=True, null=True)
+
+    def __str__(self):
+        return f"Wallet for {self.user.email}"
+
+# Bank Account Model
+class BankAccount(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='bank_accounts')
+    bank_name = models.CharField(max_length=255)
+    account_number = models.CharField(max_length=50)
+    owner_name = models.CharField(max_length=255)
+    
+    def __str__(self):
+        return f"Bank Account for {self.user.email}"

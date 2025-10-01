@@ -4,11 +4,12 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
 from rest_framework_simplejwt.tokens import RefreshToken
+from eth_account import Account
 from django.contrib.auth import authenticate
 from django.db import IntegrityError
 from django.utils import timezone
 
-from .models import User, Artwork, Order, Favorite
+from .models import User, Artwork, Order, Favorite, Wallet, BankAccount
 from .serializers import (
     UserRegistrationSerializer,
     UserLoginSerializer,
@@ -24,6 +25,8 @@ from .serializers import (
     OrderSerializer,
     FavoriteResponseSerializer,
     ArtworkStatsSerializer,
+    WalletSerializer,
+    BankAccountSerializer,
 )
 
 # Auth Views
@@ -36,11 +39,28 @@ class RegisterView(generics.CreateAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
+
+        # Generate wallet
+        account = Account.create()
+        wallet_data = {
+            'address': account.address,
+            'private_key': account.key.hex()
+        }
+
+        # Save wallet to the database
+        Wallet.objects.create(
+            user=user,
+            address=wallet_data['address'],
+            private_key=wallet_data['private_key']
+        )
+
         refresh = RefreshToken.for_user(user)
         response_data = {
             'token': str(refresh.access_token),
-            'user': user
+            'user': user,
+            'wallet': wallet_data
         }
+
         return Response(AuthResponseSerializer(response_data).data, status=status.HTTP_201_CREATED)
 
 class LoginView(APIView):
@@ -352,3 +372,33 @@ class MyFavoritesView(generics.ListAPIView):
         # Return artworks that the user has favorited
         favorite_artworks_ids = Favorite.objects.filter(user=self.request.user).values_list('artwork__id', flat=True)
         return Artwork.objects.filter(id__in=favorite_artworks_ids)
+
+# Wallet Views
+class WalletDetailView(generics.RetrieveUpdateAPIView):
+    queryset = Wallet.objects.all()
+    serializer_class = WalletSerializer
+    permission_classes = (IsAuthenticated,)
+
+    def get_object(self):
+        # Return the wallet of the current user
+        return self.request.user.wallet
+
+# Bank Account Views
+class BankAccountListCreateView(generics.ListCreateAPIView):
+    serializer_class = BankAccountSerializer
+    permission_classes = (IsAuthenticated,)
+
+    def get_queryset(self):
+        # Return the bank accounts of the current user
+        return BankAccount.objects.filter(user=self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+class BankAccountDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = BankAccountSerializer
+    permission_classes = (IsAuthenticated,)
+
+    def get_queryset(self):
+        # Return the bank accounts of the current user
+        return BankAccount.objects.filter(user=self.request.user)

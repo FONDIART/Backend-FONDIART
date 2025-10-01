@@ -1,7 +1,17 @@
+require('dotenv').config({ path: '../.env' });
 const { ethers } = require("ethers");
 
 function generateWallet() {
-  const wallet = ethers.Wallet.createRandom();
+  let provider;
+  if (process.env.SEPOLIA_RPC_URL) {
+    provider = new ethers.JsonRpcProvider(process.env.SEPOLIA_RPC_URL);
+  }
+
+  let wallet = ethers.Wallet.createRandom();
+  if (provider) {
+    wallet = wallet.connect(provider);
+  }
+
   return {
     privateKey: wallet.privateKey,
     address: wallet.address,

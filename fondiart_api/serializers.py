@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User, Artwork, Order, Favorite # Added Order, Favorite
+from .models import User, Artwork, Order, Favorite, Wallet, BankAccount # Added Order, Favorite
 
 # Auth Serializers
 class UserRegistrationSerializer(serializers.ModelSerializer):
@@ -27,6 +27,7 @@ class UserLoginSerializer(serializers.Serializer):
 class AuthResponseSerializer(serializers.Serializer):
     token = serializers.CharField()
     user = serializers.SerializerMethodField()
+    wallet = serializers.DictField(read_only=True, required=False)
 
     def get_user(self, obj):
         # Assuming obj['user'] is a User instance
@@ -136,3 +137,15 @@ class ErrorSerializer(serializers.Serializer):
     code = serializers.CharField()
     message = serializers.CharField()
     details = serializers.DictField(required=False)
+
+# Wallet Serializers
+class WalletSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Wallet
+        fields = '__all__'
+
+# Bank Account Serializers
+class BankAccountSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BankAccount
+        fields = '__all__'

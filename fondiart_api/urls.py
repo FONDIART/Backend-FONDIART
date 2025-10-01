@@ -21,6 +21,9 @@ from .views import (
     FavoriteCreateView,
     FavoriteDeleteView,
     MyFavoritesView,
+    WalletDetailView,
+    BankAccountListCreateView,
+    BankAccountDetailView,
 )
 
 urlpatterns = [
@@ -49,4 +52,8 @@ urlpatterns = [
     path('artworks/<int:pk>/favorite/create/', FavoriteCreateView.as_view(), name='favorite-create'),
     path('artworks/<int:pk>/favorite/delete/', FavoriteDeleteView.as_view(), name='favorite-delete'),
     path('me/favorites/', MyFavoritesView.as_view(), name='my-favorites'),
+
+    path('wallets/me/', WalletDetailView.as_view(), name='wallet-detail'),
+    path('bank-accounts/', BankAccountListCreateView.as_view(), name='bank-account-list-create'),
+    path('bank-accounts/<int:pk>/', BankAccountDetailView.as_view(), name='bank-account-detail'),
 ]
