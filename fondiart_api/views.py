@@ -8,6 +8,7 @@ from eth_account import Account
 from django.contrib.auth import authenticate
 from django.db import IntegrityError
 from django.utils import timezone
+import cloudinary.uploader
 
 from .models import User, Artwork, Order, Favorite, Wallet, BankAccount
 from .serializers import (
@@ -26,6 +27,7 @@ from .serializers import (
     FavoriteResponseSerializer,
     ArtworkStatsSerializer,
     WalletSerializer,
+    WalletAddressSerializer,
     BankAccountSerializer,
 )
 
@@ -77,6 +79,7 @@ class LoginView(APIView):
 
         if user is not None:
             refresh = RefreshToken.for_user(user)
+            print(f"Generated JWT for user {user.email}: {str(refresh.access_token)}")
             response_data = {
                 'token': str(refresh.access_token),
                 'user': user
@@ -93,12 +96,42 @@ class MeView(generics.RetrieveAPIView):
         return self.request.user
 
 # User Views
+class UserWalletAddressView(generics.RetrieveAPIView):
+    queryset = Wallet.objects.all()
+    serializer_class = WalletAddressSerializer
+    permission_classes = (IsAuthenticated,)
+    lookup_field = 'user_id'
+
+    def get_object(self):
+        user_id = self.kwargs.get('user_id')
+        try:
+            # Retrieve the wallet for the specified user ID
+            return Wallet.objects.get(user_id=user_id)
+        except Wallet.DoesNotExist:
+            # You might want to handle this case, e.g., by raising a 404 error
+            from django.http import Http404
+            raise Http404
+            
 class UserUpdateMeView(generics.UpdateAPIView):
     permission_classes = (IsAuthenticated,)
     serializer_class = UserUpdateSerializer
 
     def get_object(self):
         return self.request.user
+
+class ImageUploadView(APIView):
+    permission_classes = (IsAuthenticated,)
+
+    def post(self, request, *args, **kwargs):
+        file = request.FILES.get('file')
+        if not file:
+            return Response({'error': 'No file provided'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            upload_result = cloudinary.uploader.upload(file)
+            return Response({'url': upload_result['secure_url']}, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 # Artwork Views
 class ArtworkListView(generics.ListAPIView):
@@ -374,16 +407,15 @@ class MyFavoritesView(generics.ListAPIView):
         return Artwork.objects.filter(id__in=favorite_artworks_ids)
 
 # Wallet Views
-class WalletDetailView(generics.RetrieveUpdateAPIView):
+class WalletDetailView(generics.RetrieveAPIView):
     queryset = Wallet.objects.all()
-    serializer_class = WalletSerializer
+    serializer_class = WalletAddressSerializer
     permission_classes = (IsAuthenticated,)
 
     def get_object(self):
         # Return the wallet of the current user
         return self.request.user.wallet
 
-# Bank Account Views
 class BankAccountListCreateView(generics.ListCreateAPIView):
     serializer_class = BankAccountSerializer
     permission_classes = (IsAuthenticated,)

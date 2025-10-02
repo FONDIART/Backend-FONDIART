@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     'blockchain',
     'fondiart_api',
     'rest_framework_simplejwt', # Added this line
+    'finance.apps.FinanceConfig',
 ]
 
 MIDDLEWARE = [
@@ -177,3 +178,15 @@ SIMPLE_JWT = {
     'SLIDING_TOKEN_LIFETIME': timedelta(minutes=5),
     'SLIDING_TOKEN_REFRESH_LIFETIME': timedelta(days=1),
 }
+
+import cloudinary
+import cloudinary.uploader
+import cloudinary.api
+
+cloudinary.config(
+    cloud_name = "dfuz1ekdn",
+    api_key = "363396118557943",
+    api_secret = "dKUfSksEVhgDiMdchZONafsiXIQ"
+)
+
+

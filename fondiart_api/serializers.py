@@ -39,13 +39,13 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['id', 'name', 'email', 'role', 'avatarUrl', 'createdAt']
-        read_only_fields = ['id', 'email', 'role'] # Removed 'createdAt'
+        fields = ['id', 'name', 'email', 'role', 'avatarUrl', 'createdAt', 'dni', 'phone', 'bio', 'cbu']
+        read_only_fields = ['id', 'email', 'role']
 
 class UserUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['name', 'avatarUrl']
+        fields = ['name', 'avatarUrl', 'dni', 'phone', 'bio', 'cbu']
 
 # Artwork Serializers
 class RatingSerializer(serializers.Serializer):
@@ -139,6 +139,11 @@ class ErrorSerializer(serializers.Serializer):
     details = serializers.DictField(required=False)
 
 # Wallet Serializers
+class WalletAddressSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Wallet
+        fields = ['address']
+
 class WalletSerializer(serializers.ModelSerializer):
     class Meta:
         model = Wallet
@@ -149,3 +154,4 @@ class BankAccountSerializer(serializers.ModelSerializer):
     class Meta:
         model = BankAccount
         fields = '__all__'
+        read_only_fields = ['user']

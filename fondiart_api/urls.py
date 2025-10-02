@@ -24,13 +24,18 @@ from .views import (
     WalletDetailView,
     BankAccountListCreateView,
     BankAccountDetailView,
+    UserWalletAddressView,
+    ImageUploadView,
 )
 
 urlpatterns = [
     path('auth/register/', RegisterView.as_view(), name='auth-register'),
     path('auth/login/', LoginView.as_view(), name='auth-login'),
     path('auth/me/', MeView.as_view(), name='auth-me'),
+    path('users/<int:user_id>/wallet/', UserWalletAddressView.as_view(), name='user-wallet-address'),
     path('users/me/', UserUpdateMeView.as_view(), name='user-update-me'),
+
+    path('upload/', ImageUploadView.as_view(), name='image-upload'),
 
     path('artworks/', ArtworkListView.as_view(), name='artwork-list'),
     path('artworks/create/', ArtworkCreateView.as_view(), name='artwork-create'),

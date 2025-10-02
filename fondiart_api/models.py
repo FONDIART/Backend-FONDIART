@@ -19,6 +19,7 @@ class User(AbstractUser):
     user_permissions = models.ManyToManyField(Permission, related_name='fondiart_users_permissions', blank=True)
     phone = models.CharField(max_length=255, blank=True) # Add name field
     bio = models.TextField(blank=True, null=True) # Add bio field
+    cbu = models.CharField(max_length=22, blank=True, null=True) # Add cbu field
     
     
 

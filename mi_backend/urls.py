@@ -21,4 +21,5 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('blockchain.urls')),
     path('api/v1/', include('fondiart_api.urls')),
+    path('api/v1/finance/', include('finance.urls')),
 ]
