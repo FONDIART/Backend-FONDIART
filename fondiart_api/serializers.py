@@ -79,7 +79,7 @@ class ArtworkDetailSerializer(ArtworkListItemSerializer):
     approvedAt = serializers.DateTimeField(allow_null=True)
 
     class Meta(ArtworkListItemSerializer.Meta):
-        fields = ArtworkListItemSerializer.Meta.fields + ['description', 'ownerId', 'gallery', 'approvedAt']
+        fields = ArtworkListItemSerializer.Meta.fields + ['description', 'ownerId', 'gallery', 'approvedAt', 'contract_address']
 
 class ArtworkCreateSerializer(serializers.ModelSerializer):
     image = serializers.URLField() # Expect a URL for the image
@@ -195,3 +195,12 @@ class AuctionCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Auction
         fields = ['start_price', 'start_date', 'end_date']
+
+class AuctionSerializer(serializers.ModelSerializer):
+    artwork_title = serializers.CharField(source='artwork.title', read_only=True)
+    artwork_image = serializers.URLField(source='artwork.image.url', read_only=True)
+    artist_name = serializers.CharField(source='artwork.artist.name', read_only=True)
+
+    class Meta:
+        model = Auction
+        fields = '__all__'

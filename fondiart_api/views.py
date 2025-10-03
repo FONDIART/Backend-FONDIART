@@ -11,6 +11,7 @@ from django.db import IntegrityError
 from django.utils import timezone
 import cloudinary.uploader
 from django.shortcuts import get_object_or_404
+import subprocess
 
 from .models import User, Artwork, Order, Favorite, Wallet, BankAccount, Auction
 from .serializers import (
@@ -32,6 +33,7 @@ from .serializers import (
     WalletAddressSerializer,
     BankAccountSerializer,
     AuctionCreateSerializer,
+    AuctionSerializer,
 )
 
 # Auth Views
@@ -487,3 +489,77 @@ class AuctionCreateView(generics.CreateAPIView):
         artwork.status = 'approved'
         artwork.save()
         serializer.save(artwork=artwork)
+
+class ArtworkTokenizeView(APIView):
+    permission_classes = (IsAdminRoleUser,)
+
+    def post(self, request, pk):
+        try:
+            artwork = Artwork.objects.get(pk=pk)
+        except Artwork.DoesNotExist:
+            return Response({"error": "Artwork not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        # Get artist and platform addresses
+        try:
+            artist_wallet = Wallet.objects.get(user=artwork.artist)
+            admin_user = User.objects.get(role='admin')
+            platform_wallet = Wallet.objects.get(user=admin_user)
+        except Wallet.DoesNotExist:
+            return Response({"error": "Wallet not found for artist or platform"}, status=status.HTTP_400_BAD_REQUEST)
+        except User.DoesNotExist:
+            return Response({"error": "Admin user not found"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Generate token symbol
+        artist_name_parts = artwork.artist.name.split()
+        if len(artist_name_parts) > 1:
+            symbol = artist_name_parts[-1][0] + artist_name_parts[0][0]
+        else:
+            symbol = artwork.artist.name[0:2]
+        
+        artwork_count = Artwork.objects.filter(artist=artwork.artist).count()
+        token_symbol = f"{symbol.upper()}{artwork_count}"
+
+        # Prepare and execute deployment script
+        command = [
+            "node",
+            "--network", "sepolia",
+            "scripts/deploy_cuadro_token.cjs",
+            artwork.title,
+            artwork.artist.name,
+            str(artwork.createdAt.year),
+            artist_wallet.address,
+            platform_wallet.address,
+            str(artwork.fractionsTotal),
+            token_symbol,
+        ]
+
+        try:
+            result = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                check=True,
+                cwd="/Users/jorgeantoniosegovia/codigo/FondiArt_back/backend-Fondiart"
+            )
+            contract_address = result.stdout.strip()
+            
+            # Save contract address to artwork
+            artwork.contract_address = contract_address
+            artwork.save()
+
+            return Response({"contract_address": contract_address}, status=status.HTTP_200_OK)
+        except subprocess.CalledProcessError as e:
+            return Response({"error": "Failed to deploy contract", "details": e.stderr}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except FileNotFoundError:
+            return Response({"error": "Node.js or deployment script not found"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class AuctionListView(generics.ListAPIView):
+    queryset = Auction.objects.all()
+    serializer_class = AuctionSerializer
+    permission_classes = (AllowAny,)
+
+class AuctionDetailView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = Auction.objects.all()
+    serializer_class = AuctionSerializer
+    permission_classes = (IsAdminRoleUser,)
+    lookup_field = 'pk'

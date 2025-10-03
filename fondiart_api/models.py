@@ -80,6 +80,7 @@ class Artwork(models.Model):
     rating_count = models.IntegerField(default=0)
     image = models.ImageField(upload_to='artworks/', blank=True, null=True)
     gallery = models.JSONField(default=list, blank=True, null=True)
+    contract_address = models.CharField(max_length=42, blank=True, null=True)
 
     def __str__(self):
         return self.title

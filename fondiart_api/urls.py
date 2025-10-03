@@ -29,6 +29,9 @@ from .views import (
     NonDirectSaleArtworkListView,
     ImageUploadView,
     AuctionCreateView,
+    ArtworkTokenizeView,
+    AuctionListView,
+    AuctionDetailView,
 )
 
 urlpatterns = [
@@ -52,6 +55,7 @@ urlpatterns = [
     path('me/artworks/', MyArtworksView.as_view(), name='my-artworks'),
     path('artworks/<int:pk>/stats/', ArtworkStatsView.as_view(), name='artwork-stats'),
     path('artworks/<int:pk>/auctions/create/', AuctionCreateView.as_view(), name='auction-create'),
+    path('artworks/<int:pk>/tokenize/', ArtworkTokenizeView.as_view(), name='artwork-tokenize'),
 
     path('admin/artworks/', AdminArtworkListView.as_view(), name='admin-artwork-list'),
     path('admin/artworks/<int:pk>/status/', AdminArtworkStatusUpdateView.as_view(), name='admin-artwork-status-update'),
@@ -67,4 +71,6 @@ urlpatterns = [
     path('wallets/me/', WalletDetailView.as_view(), name='wallet-detail'),
     path('bank-accounts/', BankAccountListCreateView.as_view(), name='bank-account-list-create'),
     path('bank-accounts/<int:pk>/', BankAccountDetailView.as_view(), name='bank-account-detail'),
+    path('auctions/', AuctionListView.as_view(), name='auction-list'),
+    path('auctions/<int:pk>/', AuctionDetailView.as_view(), name='auction-detail'),
 ]
