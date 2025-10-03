@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from rest_framework.exceptions import ValidationError
 from .models import User, Artwork, Order, Favorite, Wallet, BankAccount, Auction, Bid
 
 # Auth Serializers
@@ -30,12 +31,11 @@ class AuthResponseSerializer(serializers.Serializer):
     wallet = serializers.DictField(read_only=True, required=False)
 
     def get_user(self, obj):
-        # Assuming obj['user'] is a User instance
         return UserSerializer(obj['user']).data
 
 # User Serializers
 class UserSerializer(serializers.ModelSerializer):
-    createdAt = serializers.DateTimeField(source='date_joined', read_only=True) # Map date_joined to createdAt
+    createdAt = serializers.DateTimeField(source='date_joined', read_only=True)
 
     class Meta:
         model = User
@@ -51,12 +51,12 @@ class UserUpdateSerializer(serializers.ModelSerializer):
 class RatingSerializer(serializers.Serializer):
     avg = serializers.FloatField()
     count = serializers.IntegerField()
-    my = serializers.IntegerField(required=False) # 'my' is optional
+    my = serializers.IntegerField(required=False)
 
 class ArtworkListItemSerializer(serializers.ModelSerializer):
     artist = serializers.SerializerMethodField()
-    status = serializers.CharField(source='get_status_display') # To get human-readable status
-    rating = serializers.SerializerMethodField() # Assuming a method get_rating on Artwork model
+    status = serializers.CharField(source='get_status_display')
+    rating = serializers.SerializerMethodField()
 
     class Meta:
         model = Artwork
@@ -66,57 +66,60 @@ class ArtworkListItemSerializer(serializers.ModelSerializer):
         ]
 
     def get_artist(self, obj):
-        return {'id': str(obj.artist.id), 'name': obj.artist.name} # Assuming artist has id and name
+        return {'id': str(obj.artist.id), 'name': obj.artist.name}
 
     def get_rating(self, obj):
-        # Placeholder for rating logic
-        return {'avg': obj.rating_avg, 'count': obj.rating_count, 'my': 0} # 'my' will be calculated in view
+        return {'avg': obj.rating_avg, 'count': obj.rating_count, 'my': 0}
 
 class ArtworkDetailSerializer(ArtworkListItemSerializer):
     gallery = serializers.ListField(child=serializers.URLField())
     description = serializers.CharField()
-    ownerId = serializers.CharField(source='artist.id') # Assuming ownerId is the artist's ID
+    ownerId = serializers.CharField(source='artist.id')
     approvedAt = serializers.DateTimeField(allow_null=True)
 
     class Meta(ArtworkListItemSerializer.Meta):
         fields = ArtworkListItemSerializer.Meta.fields + ['description', 'ownerId', 'gallery', 'approvedAt', 'contract_address']
 
 class ArtworkCreateSerializer(serializers.ModelSerializer):
-    image = serializers.URLField() # Expect a URL for the image
-    price_reference = serializers.DecimalField(write_only=True, max_digits=10, decimal_places=2)
+    image = serializers.URLField(required=True)
 
     class Meta:
         model = Artwork
         fields = [
             'title', 'description', 'price', 'fractionFrom', 'fractionsTotal',
             'image', 'gallery', 'tags', 'status', 'fractionsLeft',
-            'price_reference', 'venta_directa', 'estado_venta'
+            'venta_directa', 'estado_venta'
         ]
-        read_only_fields = ['fractionsLeft'] # Status is now controlled by the create method
+        read_only_fields = ['status']
         extra_kwargs = {
+            'title': {'required': True},
+            'description': {'required': True},
+            'tags': {'required': True},
             'price': {'required': False},
             'fractionFrom': {'required': False},
             'fractionsTotal': {'required': False},
+            'fractionsLeft': {'required': False},
             'venta_directa': {'required': False},
             'estado_venta': {'required': False},
-            'status': {'required': False}, # Status is not required from client
         }
 
-    def create(self, validated_data):
-        price_reference = validated_data.pop('price_reference')
+    def validate(self, attrs):
+        missing = []
+        for f in ['title', 'description', 'tags', 'image']:
+            if not attrs.get(f):
+                missing.append(f)
+        if missing:
+            raise ValidationError({f: 'Este campo es obligatorio.' for f in missing})
 
-        # Set the actual model fields based on price_reference
-        validated_data['price'] = price_reference
-        validated_data['fractionFrom'] = price_reference
-        validated_data['fractionsTotal'] = 1
-        validated_data['fractionsLeft'] = 1
-        
-        # Set status based on venta_directa. This logic overrides any client input for status.
-        if validated_data.get('venta_directa') is True:
-            validated_data['status'] = 'approved'
-        else:
-            validated_data['status'] = 'pending'
-        
+        if attrs.get('venta_directa') is True and attrs.get('price') in (None, ''):
+            raise ValidationError({'price': 'Obligatorio cuando venta_directa es true.'})
+
+        return attrs
+
+    def create(self, validated_data):
+        if validated_data.get('fractionsTotal') is not None and validated_data.get('fractionsLeft') is None:
+            validated_data['fractionsLeft'] = validated_data['fractionsTotal']
+        validated_data['status'] = 'approved' if validated_data.get('venta_directa') else 'pending'
         return super().create(validated_data)
 
 class ArtworkUpdateSerializer(serializers.ModelSerializer):
@@ -130,7 +133,7 @@ class ArtworkUpdateSerializer(serializers.ModelSerializer):
             'fractionFrom': {'required': False, 'allow_null': True},
             'fractionsTotal': {'required': False, 'allow_null': True},
         }
-        partial = True # Allow partial updates
+        partial = True
 
 # Order Serializers
 class OrderCreateSerializer(serializers.ModelSerializer):
@@ -156,15 +159,15 @@ class OrderSerializer(serializers.ModelSerializer):
 class FavoriteResponseSerializer(serializers.Serializer):
     favorited = serializers.BooleanField()
 
-# Artwork Stats Serializer (for ArtworkStats schema)
+# Artwork Stats Serializer
 class ArtworkStatsSerializer(serializers.Serializer):
     artworkId = serializers.CharField()
     soldFractions = serializers.IntegerField()
     fractionsTotal = serializers.IntegerField()
     soldPct = serializers.FloatField()
     revenue = serializers.DecimalField(max_digits=10, decimal_places=2)
-    timeline = serializers.ListField(child=serializers.DictField()) # Assuming dict for date/sold
-    buyersTop = serializers.ListField(child=serializers.DictField()) # Assuming dict for buyerId/name/fractions
+    timeline = serializers.ListField(child=serializers.DictField())
+    buyersTop = serializers.ListField(child=serializers.DictField())
 
 # Error Serializer
 class ErrorSerializer(serializers.Serializer):
