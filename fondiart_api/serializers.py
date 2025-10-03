@@ -126,6 +126,10 @@ class ArtworkUpdateSerializer(serializers.ModelSerializer):
             'title', 'description', 'price', 'fractionFrom', 'fractionsTotal',
             'image', 'gallery', 'tags'
         ]
+        extra_kwargs = {
+            'fractionFrom': {'required': False, 'allow_null': True},
+            'fractionsTotal': {'required': False, 'allow_null': True},
+        }
         partial = True # Allow partial updates
 
 # Order Serializers

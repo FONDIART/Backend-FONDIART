@@ -66,9 +66,9 @@ class Artwork(models.Model):
     artist = models.ForeignKey(User, on_delete=models.CASCADE, related_name='artworks')
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='pending')
     price = models.DecimalField(max_digits=10, decimal_places=2)
-    fractionFrom = models.DecimalField(max_digits=10, decimal_places=2) # Assuming this is a decimal for fractional ownership
-    fractionsTotal = models.IntegerField()
-    fractionsLeft = models.IntegerField()
+    fractionFrom = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    fractionsTotal = models.IntegerField(null=True, blank=True)
+    fractionsLeft = models.IntegerField(null=True, blank=True)
     tags = models.JSONField(default=list) # Storing tags as a JSON list
     createdAt = models.DateTimeField(auto_now_add=True)
     approvedAt = models.DateTimeField(blank=True, null=True)

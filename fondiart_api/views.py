@@ -212,22 +212,24 @@ class ArtworkRecommendedView(generics.ListAPIView):
             limit = 5 # Default if invalid
         return super().get_queryset()[:limit]
 
-class ArtworkDetailView(generics.RetrieveAPIView):
+class ArtworkDetailUpdateView(generics.RetrieveUpdateAPIView):
     queryset = Artwork.objects.all()
-    serializer_class = ArtworkDetailSerializer
-    permission_classes = (AllowAny,)
-    lookup_field = 'pk'
-
-class ArtworkUpdateView(generics.UpdateAPIView):
-    queryset = Artwork.objects.all()
-    serializer_class = ArtworkUpdateSerializer
     permission_classes = (IsAuthenticated,)
     lookup_field = 'pk'
 
+    def get_serializer_class(self):
+        if self.request.method in ['PUT', 'PATCH']:
+            return ArtworkUpdateSerializer
+        return ArtworkDetailSerializer
+
     def get_queryset(self):
         user = self.request.user
+        if self.request.method == 'GET':
+            return self.queryset.all()
+        
         if user.role == 'admin':
             return self.queryset.all()
+        
         # Only allow artist to update their own artworks
         return self.queryset.filter(artist=user)
 
