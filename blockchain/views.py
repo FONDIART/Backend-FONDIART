@@ -1,136 +1,65 @@
-from rest_framework import generics
-
-from .models import Cuadro
-from .serializers import CuadroSerializer
-from rest_framework.views import APIView
+import subprocess
+from rest_framework import generics, status
 from rest_framework.response import Response
-from . import cuadro_token_service
-
-
-import json
-import os
-from subprocess import Popen, PIPE
-from rest_framework.response import Response
-from rest_framework.views import APIView
-from rest_framework import status
+from django.shortcuts import get_object_or_404
+from fondiart_api.models import Artwork
 from rest_framework.permissions import IsAuthenticated
+from fondiart_api.permissions import IsAdminRoleUser
+from .models import CuadroToken
+from .serializers import CuadroTokenSerializer
+from .cuadro_token_service import deploy_and_tokenize
 
-# Make sure to import your user model
-from django.contrib.auth import get_user_model
-
-# Get the User model
-User = get_user_model()
-
-class HardhatWalletView(APIView):
-    # This ensures only authenticated users can access the endpoint
-    permission_classes = [IsAuthenticated]
+class TokenizeArtworkView(generics.GenericAPIView):
+    permission_classes = [IsAdminRoleUser]
+    serializer_class = CuadroTokenSerializer
 
     def post(self, request, *args, **kwargs):
+        artwork_id = request.data.get('artwork_id')
+        if not artwork_id:
+            return Response({'error': 'Artwork ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        artwork = get_object_or_404(Artwork, pk=artwork_id)
+        admin_user = request.user
+
+        # Verify wallets exist
+        if not hasattr(admin_user, 'wallet'):
+            return Response({'error': 'Admin user does not have an associated wallet.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not hasattr(artwork.artist, 'wallet'):
+            return Response({'error': 'Artist does not have an associated wallet.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if hasattr(artwork, 'cuadro_token'):
+            return Response({'error': 'This artwork has already been tokenized.'}, status=status.HTTP_400_BAD_REQUEST)
+
         try:
-            # Get the path to the Node.js script relative to the project root
-            # This is more robust than a hardcoded absolute path
-            scripts_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'scripts')
-            node_script_path = os.path.join(scripts_dir, 'generateWallet.cjs')
+            # Pass the artwork and the admin's wallet address to the service
+            contract_address = deploy_and_tokenize(artwork, admin_user.wallet.address)
+            
+            token_data = {
+                'artwork': artwork.id,
+                'contract_address': contract_address,
+                'token_name': f"{artwork.title} Token",
+                'token_symbol': f"ART{artwork.id}",
+                'total_supply': artwork.fractionsTotal,
+            }
+            
+            serializer = self.get_serializer(data=token_data)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
 
-            # Step 1: Call the Node.js script to generate a wallet
-            node_process = Popen(['node', node_script_path], stdout=PIPE, stderr=PIPE, cwd=scripts_dir)
-            stdout, stderr = node_process.communicate()
-
-            if node_process.returncode != 0:
-                error_message = stderr.decode('utf-8').strip()
-                print(f"Node.js script failed with error:\n{error_message}")
-                return Response(
-                    {"error": f"Failed to generate wallet: {error_message}"},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
-                )
-
-            # Step 2: Parse the JSON output from the Node.js script
-            wallet_data = json.loads(stdout.decode('utf-8'))
-            private_key = wallet_data['privateKey']
-            address = wallet_data['address']
-
-            # Step 3: Securely store the private key (OFF-CHAIN)
-            # This is the most critical step. Your implementation here will vary
-            # depending on your chosen secret management service (AWS Secrets Manager, etc.).
-            # Example placeholder:
-            # store_private_key_securely(private_key, request.user.id)
-            print(f"Generated Address for user {request.user.id}: {address}")
-            print(f"Private Key (for secure storage): {private_key}")
-
-            # Step 4: Save the public address to your database
-            # Assuming your user model has an 'ethereum_address' field
-            request.user.ethereum_address = address
-            request.user.save()
-            print(f"Address {address} saved for user {request.user.id}")
-
-            return Response(
-                {"address": address,
-                 "private_key": private_key
-            },
-
-                status=status.HTTP_201_CREATED
-            )
-
+        except subprocess.CalledProcessError as e:
+            error_message = f"Failed to execute deployment script. Return code: {e.returncode}\n"
+            error_message += f"Stdout: {e.stdout}\n"
+            error_message += f"Stderr: {e.stderr}"
+            return Response({'error': error_message}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         except Exception as e:
-            print(f"An unexpected error occurred: {e}")
-            return Response(
-                {"error": "An unexpected error occurred."},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+            return Response({'error': f"An unexpected error occurred: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-class CreateCuadroView(generics.CreateAPIView):
-    """
-    Endpoint para crear un nuevo cuadro y generar la distribución de tokens.
-    """
-    queryset = Cuadro.objects.all()
-    serializer_class = CuadroSerializer
+class GetContractAddressView(generics.GenericAPIView):
+    permission_classes = [IsAuthenticated]
 
-
-
-class ContractInfoView(APIView):
-    def get(self, request):
-        try:
-            info = cuadro_token_service.get_info()
-            return Response(info)
-        except Exception as e:
-            return Response({'error': str(e)}, status=500)
-
-class DistribuirTokensView(APIView):
-    def post(self, request):
-        try:
-            receipt = cuadro_token_service.distribuir_tokens()
-            return Response({
-                'status': 'success',
-                'transaction_hash': receipt.transactionHash.hex(),
-            })
-        except Exception as e:
-            return Response({'error': str(e)}, status=500)
-
-class CertificarPropiedadView(APIView):
-    def post(self, request):
-        nuevo_propietario = request.data.get('nuevo_propietario')
-        cantidad = request.data.get('cantidad')
-        if not nuevo_propietario or not cantidad:
-            return Response({'error': 'Faltan parametros'}, status=400)
-        
-        try:
-            cantidad = int(cantidad)
-            receipt = cuadro_token_service.certificar_propiedad(nuevo_propietario, cantidad)
-            return Response({
-                'status': 'success',
-                'transaction_hash': receipt.transactionHash.hex(),
-            })
-        except Exception as e:
-            return Response({'error': str(e)}, status=500)
-
-class BalanceView(APIView):
-    def get(self, request):
-        address = request.query_params.get('address')
-        if not address:
-            return Response({'error': 'Falta la direccion'}, status=400)
-        
-        try:
-            balance = cuadro_token_service.get_balance(address)
-            return Response({'address': address, 'balance': balance})
-        except Exception as e:
-            return Response({'error': str(e)}, status=500)
+    def get(self, request, *args, **kwargs):
+        artwork_id = self.kwargs.get('artwork_id')
+        token = get_object_or_404(CuadroToken, artwork_id=artwork_id)
+        return Response({'contract_address': token.contract_address}, status=status.HTTP_200_OK)

@@ -9,6 +9,7 @@ from .views import (
     ArtworkRecommendedView,
     ArtworkDetailView,
     ArtworkUpdateView,
+    ArtworkDeleteView,
     ArtworkRatingView,
     ArtworkRateView,
     MyArtworksView,
@@ -25,7 +26,10 @@ from .views import (
     BankAccountListCreateView,
     BankAccountDetailView,
     UserWalletAddressView,
+    ArtistArtworkListView,
+    NonDirectSaleArtworkListView,
     ImageUploadView,
+    AuctionCreateView,
 )
 
 urlpatterns = [
@@ -33,19 +37,23 @@ urlpatterns = [
     path('auth/login/', LoginView.as_view(), name='auth-login'),
     path('auth/me/', MeView.as_view(), name='auth-me'),
     path('users/<int:user_id>/wallet/', UserWalletAddressView.as_view(), name='user-wallet-address'),
+    path('users/<int:user_id>/artworks/', ArtistArtworkListView.as_view(), name='user-artwork-list'),
     path('users/me/', UserUpdateMeView.as_view(), name='user-update-me'),
 
     path('upload/', ImageUploadView.as_view(), name='image-upload'),
 
     path('artworks/', ArtworkListView.as_view(), name='artwork-list'),
+    path('artworks/non-direct-sale/', NonDirectSaleArtworkListView.as_view(), name='artwork-non-direct-sale-list'),
     path('artworks/create/', ArtworkCreateView.as_view(), name='artwork-create'),
     path('artworks/recommended/', ArtworkRecommendedView.as_view(), name='artwork-recommended'),
     path('artworks/<int:pk>/', ArtworkDetailView.as_view(), name='artwork-detail'),
     path('artworks/<int:pk>/update/', ArtworkUpdateView.as_view(), name='artwork-update'),
+    path('artworks/<int:pk>/delete/', ArtworkDeleteView.as_view(), name='artwork-delete'),
     path('artworks/<int:pk>/rating/', ArtworkRatingView.as_view(), name='artwork-rating'),
     path('artworks/<int:pk>/rate/', ArtworkRateView.as_view(), name='artwork-rate'),
     path('me/artworks/', MyArtworksView.as_view(), name='my-artworks'),
     path('artworks/<int:pk>/stats/', ArtworkStatsView.as_view(), name='artwork-stats'),
+    path('artworks/<int:pk>/auctions/create/', AuctionCreateView.as_view(), name='auction-create'),
 
     path('admin/artworks/', AdminArtworkListView.as_view(), name='admin-artwork-list'),
     path('admin/artworks/<int:pk>/status/', AdminArtworkStatusUpdateView.as_view(), name='admin-artwork-status-update'),

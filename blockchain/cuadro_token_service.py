@@ -1,78 +1,53 @@
-import json
+import subprocess
 import os
-from web3 import Web3
-from dotenv import load_dotenv
+from django.conf import settings
 
-load_dotenv()
-
-# Sepolia RPC URL from .env file
-SEPOLIA_RPC_URL = os.getenv("SEPOLIA_RPC_URL")
-web3 = Web3(Web3.HTTPProvider(SEPOLIA_RPC_URL))
-
-# Deployed contract address - IMPORTANT: This needs to be updated with the address of the contract deployed on Sepolia
-CONTRACT_ADDRESS = "0xFD471836031dc5108809D173A067e8486B9047A3"
-
-# Private key from .env file for signing transactions
-PRIVATE_KEY = os.getenv("PRIVATE_KEY")
-owner = web3.eth.account.from_key(PRIVATE_KEY).address
-
-
-# Absolute path to the contract ABI
-ABI_PATH = "/Users/jorgeantoniosegovia/codigo/backend-Fondiart/artifacts/contracts/Tokenizar_Obra.sol/CuadroToken.json"
-
-def get_contract():
-    with open(ABI_PATH) as f:
-        artifact = json.load(f)
-        abi = artifact['abi']
+def deploy_and_tokenize(artwork, admin_wallet_address):
+    """
+    Executes the simplified hardhat script to deploy a new CuadroToken contract.
+    The contract now has hardcoded values for testing purposes.
     
-    contract = web3.eth.contract(address=CONTRACT_ADDRESS, abi=abi)
-    return contract
+    Args:
+        artwork (Artwork): The artwork instance to tokenize (still required for context).
+        admin_wallet_address (str): The wallet address of the admin user (no longer passed to the script).
 
-def get_info():
-    contract = get_contract()
-    info = {
-        "nombre_cuadro": contract.functions.nombreCuadro().call(),
-        "autor": contract.functions.autor().call(),
-        "anio_creacion": contract.functions.anioCreacion().call(),
-        "artista": str(contract.functions.artista().call()),
-        "plataforma": str(contract.functions.plataforma().call()),
-        "total_supply": str(contract.functions.totalSupply().call()),
-    }
-    return info
-
-def distribuir_tokens():
-    contract = get_contract()
+    Returns:
+        str: The address of the deployed smart contract.
+        
+    Raises:
+        subprocess.CalledProcessError: If the script execution fails.
+        Exception: If the contract address cannot be found in the script's output.
+    """
     
-    nonce = web3.eth.get_transaction_count(owner)
-    tx = contract.functions.distribuirTokensIniciales().build_transaction({
-        'from': owner,
-        'nonce': nonce,
-        'gas': 2000000,
-        'gasPrice': web3.eth.gas_price,
-    })
+    # --- Script Arguments ---
+    # The script is now simplified and does not require arguments.
+    args = [
+        "npx",
+        "hardhat",
+        "run",
+        "scripts/deploy_cuadro_token.cjs",
+        "--network",
+        "sepolia"
+    ]
+
+    # Execute the script
+    process = subprocess.run(
+        args,
+        capture_output=True,
+        text=True,
+        cwd=settings.BASE_DIR,
+        check=True  # Raises CalledProcessError on non-zero exit codes
+    )
+
+    # The script is designed to print ONLY the contract address to stdout.
+    contract_address = process.stdout.strip()
     
-    signed_tx = web3.eth.account.sign_transaction(tx, PRIVATE_KEY)
-    tx_hash = web3.eth.send_raw_transaction(signed_tx.rawTransaction)
-    receipt = web3.eth.wait_for_transaction_receipt(tx_hash)
-    return receipt
+    # A simple validation to ensure we got something that looks like an address
+    if not contract_address.startswith("0x") or len(contract_address) != 42:
+        raise Exception(
+            "Script executed, but the output was not a valid contract address.\n"
+            f"Stdout: {process.stdout}\n"
+            f"Stderr: {process.stderr}"
+        )
 
-def certificar_propiedad(nuevo_propietario, cantidad):
-    contract = get_contract()
-
-    nonce = web3.eth.get_transaction_count(owner)
-    tx = contract.functions.certificarPropiedad(nuevo_propietario, cantidad).build_transaction({
-        'from': owner,
-        'nonce': nonce,
-        'gas': 2000000,
-        'gasPrice': web3.eth.gas_price,
-    })
-
-    signed_tx = web3.eth.account.sign_transaction(tx, PRIVATE_KEY)
-    tx_hash = web3.eth.send_raw_transaction(signed_tx.rawTransaction)
-    receipt = web3.eth.wait_for_transaction_receipt(tx_hash)
-    return receipt
-
-def get_balance(address):
-    contract = get_contract()
-    balance = contract.functions.balanceOf(address).call()
-    return str(balance)
+    return contract_address

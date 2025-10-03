@@ -2,15 +2,17 @@ from django.db.models import Q
 from rest_framework import generics, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from .permissions import IsAdminRoleUser
 from rest_framework_simplejwt.tokens import RefreshToken
 from eth_account import Account
 from django.contrib.auth import authenticate
 from django.db import IntegrityError
 from django.utils import timezone
 import cloudinary.uploader
+from django.shortcuts import get_object_or_404
 
-from .models import User, Artwork, Order, Favorite, Wallet, BankAccount
+from .models import User, Artwork, Order, Favorite, Wallet, BankAccount, Auction
 from .serializers import (
     UserRegistrationSerializer,
     UserLoginSerializer,
@@ -29,6 +31,7 @@ from .serializers import (
     WalletSerializer,
     WalletAddressSerializer,
     BankAccountSerializer,
+    AuctionCreateSerializer,
 )
 
 # Auth Views
@@ -112,6 +115,14 @@ class UserWalletAddressView(generics.RetrieveAPIView):
             from django.http import Http404
             raise Http404
             
+class ArtistArtworkListView(generics.ListAPIView):
+    serializer_class = ArtworkListItemSerializer
+    permission_classes = (AllowAny,)
+
+    def get_queryset(self):
+        user_id = self.kwargs.get('user_id')
+        return Artwork.objects.filter(artist_id=user_id)
+
 class UserUpdateMeView(generics.UpdateAPIView):
     permission_classes = (IsAuthenticated,)
     serializer_class = UserUpdateSerializer
@@ -133,9 +144,16 @@ class ImageUploadView(APIView):
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+class NonDirectSaleArtworkListView(generics.ListAPIView):
+    serializer_class = ArtworkListItemSerializer
+    permission_classes = (AllowAny,)
+
+    def get_queryset(self):
+        return Artwork.objects.filter(venta_directa=False)
+
 # Artwork Views
 class ArtworkListView(generics.ListAPIView):
-    queryset = Artwork.objects.filter(status='approved')
+    queryset = Artwork.objects.filter(venta_directa=False)
     serializer_class = ArtworkListItemSerializer
     permission_classes = (AllowAny,) # Public access
 
@@ -176,8 +194,9 @@ class ArtworkCreateView(generics.CreateAPIView):
     permission_classes = (IsAuthenticated,) # Only authenticated users can create
 
     def perform_create(self, serializer):
-        # Set the artist to the current authenticated user
-        serializer.save(artist=self.request.user, fractionsLeft=serializer.validated_data['fractionsTotal'])
+        # The data transformation logic is now handled in the serializer's create method.
+        # We just need to pass the authenticated user as the artist.
+        serializer.save(artist=self.request.user)
 
 # Remaining Artwork Views
 class ArtworkRecommendedView(generics.ListAPIView):
@@ -197,23 +216,34 @@ class ArtworkDetailView(generics.RetrieveAPIView):
     queryset = Artwork.objects.all()
     serializer_class = ArtworkDetailSerializer
     permission_classes = (AllowAny,)
-    lookup_field = 'id'
+    lookup_field = 'pk'
 
 class ArtworkUpdateView(generics.UpdateAPIView):
     queryset = Artwork.objects.all()
     serializer_class = ArtworkUpdateSerializer
     permission_classes = (IsAuthenticated,)
-    lookup_field = 'id'
+    lookup_field = 'pk'
 
     def get_queryset(self):
+        user = self.request.user
+        if user.role == 'admin':
+            return self.queryset.all()
         # Only allow artist to update their own artworks
-        return self.queryset.filter(artist=self.request.user)
+        return self.queryset.filter(artist=user)
 
     def perform_update(self, serializer):
         # If status was approved, set it back to pending on update
         if serializer.instance.status == 'approved':
             serializer.instance.status = 'pending'
         serializer.save()
+
+class ArtworkDeleteView(generics.DestroyAPIView):
+    permission_classes = (IsAuthenticated,)
+    lookup_field = 'pk' # pk is the default, but being explicit is fine
+
+    def get_queryset(self):
+        # A user can only delete their own artworks
+        return Artwork.objects.filter(artist=self.request.user)
 
 class ArtworkRatingView(APIView):
     permission_classes = (AllowAny,) # Rating can be public
@@ -262,7 +292,7 @@ class MyArtworksView(generics.ListAPIView):
     permission_classes = (IsAuthenticated,)
 
     def get_queryset(self):
-        return Artwork.objects.filter(artist=self.request.user)
+        return Artwork.objects.filter(artist=self.request.user, status='approved')
 
 class ArtworkStatsView(APIView):
     permission_classes = (IsAuthenticated,)
@@ -292,7 +322,7 @@ class ArtworkStatsView(APIView):
 class AdminArtworkListView(generics.ListAPIView):
     queryset = Artwork.objects.all() # Admin can see all statuses
     serializer_class = ArtworkListItemSerializer # Or a more detailed admin serializer
-    permission_classes = (IsAdminUser,)
+    permission_classes = (IsAdminRoleUser,)
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -304,7 +334,7 @@ class AdminArtworkListView(generics.ListAPIView):
 class AdminArtworkStatusUpdateView(generics.UpdateAPIView):
     queryset = Artwork.objects.all()
     serializer_class = ArtworkDetailSerializer # Use detail serializer for response
-    permission_classes = (IsAdminUser,)
+    permission_classes = (IsAdminRoleUser,)
     lookup_field = 'id'
 
     def patch(self, request, pk):
@@ -434,3 +464,24 @@ class BankAccountDetailView(generics.RetrieveUpdateDestroyAPIView):
     def get_queryset(self):
         # Return the bank accounts of the current user
         return BankAccount.objects.filter(user=self.request.user)
+
+# Auction Views
+from rest_framework.exceptions import ValidationError
+
+# ... (other imports) ...
+
+class AuctionCreateView(generics.CreateAPIView):
+    queryset = Auction.objects.all()
+    serializer_class = AuctionCreateSerializer
+    permission_classes = [IsAdminRoleUser]
+
+    def perform_create(self, serializer):
+        artwork = get_object_or_404(Artwork, pk=self.kwargs.get('pk'))
+        
+        # Check if an auction already exists for this artwork
+        if hasattr(artwork, 'auction'):
+            raise ValidationError('An auction for this artwork already exists.')
+
+        artwork.status = 'approved'
+        artwork.save()
+        serializer.save(artwork=artwork)

@@ -55,6 +55,12 @@ class Artwork(models.Model):
         ('rejected', 'Rejected'),
     )
 
+    SALE_STATUS_CHOICES = (
+        ('publicada', 'Publicada'),
+        ('vendida', 'Vendida'),
+        ('suspendida', 'Suspendida'),
+    )
+
     title = models.CharField(max_length=255)
     description = models.TextField(blank=True, null=True)
     artist = models.ForeignKey(User, on_delete=models.CASCADE, related_name='artworks')
@@ -64,14 +70,16 @@ class Artwork(models.Model):
     fractionsTotal = models.IntegerField()
     fractionsLeft = models.IntegerField()
     tags = models.JSONField(default=list) # Storing tags as a JSON list
-    image = models.URLField(max_length=200)
-    gallery = models.JSONField(default=list) # Storing gallery images as a JSON list of URLs
     createdAt = models.DateTimeField(auto_now_add=True)
     approvedAt = models.DateTimeField(blank=True, null=True)
+    venta_directa = models.BooleanField(default=False)
+    estado_venta = models.CharField(max_length=10, choices=SALE_STATUS_CHOICES, default='publicada')
 
     # Rating fields
     rating_avg = models.FloatField(default=0.0)
     rating_count = models.IntegerField(default=0)
+    image = models.ImageField(upload_to='artworks/', blank=True, null=True)
+    gallery = models.JSONField(default=list, blank=True, null=True)
 
     def __str__(self):
         return self.title
@@ -128,3 +136,36 @@ class BankAccount(models.Model):
     
     def __str__(self):
         return f"Bank Account for {self.user.email}"
+
+# Auction Model
+class Auction(models.Model):
+    STATUS_CHOICES = (
+        ('upcoming', 'Upcoming'),
+        ('active', 'Active'),
+        ('finished', 'Finished'),
+        ('cancelled', 'Cancelled'),
+    )
+    artwork = models.OneToOneField(Artwork, on_delete=models.CASCADE, related_name='auction')
+    start_price = models.DecimalField(max_digits=10, decimal_places=2)
+    start_date = models.DateTimeField()
+    end_date = models.DateTimeField()
+    buyer = models.ForeignKey(User, on_delete=models.SET_NULL, related_name='won_auctions', null=True, blank=True)
+    final_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='upcoming')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Auction for {self.artwork.title}"
+
+# Bid Model
+class Bid(models.Model):
+    auction = models.ForeignKey(Auction, on_delete=models.CASCADE, related_name='bids')
+    bidder = models.ForeignKey(User, on_delete=models.CASCADE, related_name='bids')
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-amount']
+
+    def __str__(self):
+        return f"Bid of {self.amount} by {self.bidder.email} for {self.auction.artwork.title}"

@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User, Artwork, Order, Favorite, Wallet, BankAccount # Added Order, Favorite
+from .models import User, Artwork, Order, Favorite, Wallet, BankAccount, Auction, Bid
 
 # Auth Serializers
 class UserRegistrationSerializer(serializers.ModelSerializer):
@@ -82,12 +82,42 @@ class ArtworkDetailSerializer(ArtworkListItemSerializer):
         fields = ArtworkListItemSerializer.Meta.fields + ['description', 'ownerId', 'gallery', 'approvedAt']
 
 class ArtworkCreateSerializer(serializers.ModelSerializer):
+    image = serializers.URLField() # Expect a URL for the image
+    price_reference = serializers.DecimalField(write_only=True, max_digits=10, decimal_places=2)
+
     class Meta:
         model = Artwork
         fields = [
             'title', 'description', 'price', 'fractionFrom', 'fractionsTotal',
-            'image', 'gallery', 'tags'
+            'image', 'gallery', 'tags', 'status', 'fractionsLeft',
+            'price_reference', 'venta_directa', 'estado_venta'
         ]
+        read_only_fields = ['fractionsLeft'] # Status is now controlled by the create method
+        extra_kwargs = {
+            'price': {'required': False},
+            'fractionFrom': {'required': False},
+            'fractionsTotal': {'required': False},
+            'venta_directa': {'required': False},
+            'estado_venta': {'required': False},
+            'status': {'required': False}, # Status is not required from client
+        }
+
+    def create(self, validated_data):
+        price_reference = validated_data.pop('price_reference')
+
+        # Set the actual model fields based on price_reference
+        validated_data['price'] = price_reference
+        validated_data['fractionFrom'] = price_reference
+        validated_data['fractionsTotal'] = 1
+        validated_data['fractionsLeft'] = 1
+        
+        # Set status based on venta_directa. This logic overrides any client input for status.
+        if validated_data.get('venta_directa') is True:
+            validated_data['status'] = 'approved'
+        else:
+            validated_data['status'] = 'pending'
+        
+        return super().create(validated_data)
 
 class ArtworkUpdateSerializer(serializers.ModelSerializer):
     class Meta:
@@ -155,3 +185,9 @@ class BankAccountSerializer(serializers.ModelSerializer):
         model = BankAccount
         fields = '__all__'
         read_only_fields = ['user']
+
+# Auction Serializers
+class AuctionCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Auction
+        fields = ['start_price', 'start_date', 'end_date']
