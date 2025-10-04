@@ -1,4 +1,5 @@
 from django.urls import path
+from blockchain.views import CuadroTokenListView
 from .views import (
     RegisterView,
     LoginView,
@@ -32,6 +33,10 @@ from .views import (
     ArtworkTokenizeView,
     AuctionListView,
     AuctionDetailView,
+    ArtistListView,
+    ProjectListView,
+    ProjectDetailView,
+    ArtistProjectListView,
 )
 
 urlpatterns = [
@@ -43,6 +48,12 @@ urlpatterns = [
     path('users/me/', UserUpdateMeView.as_view(), name='user-update-me'),
 
     path('upload/', ImageUploadView.as_view(), name='image-upload'),
+
+    path('artists/', ArtistListView.as_view(), name='artist-list'),
+    path('artists/<int:artist_id>/projects/', ArtistProjectListView.as_view(), name='artist-project-list'),
+
+    path('projects/', ProjectListView.as_view(), name='project-list'),
+    path('projects/<int:pk>/', ProjectDetailView.as_view(), name='project-detail'),
 
     path('artworks/', ArtworkListView.as_view(), name='artwork-list'),
     path('artworks/non-direct-sale/', NonDirectSaleArtworkListView.as_view(), name='artwork-non-direct-sale-list'),
@@ -73,4 +84,5 @@ urlpatterns = [
     path('bank-accounts/<int:pk>/', BankAccountDetailView.as_view(), name='bank-account-detail'),
     path('auctions/', AuctionListView.as_view(), name='auction-list'),
     path('auctions/<int:pk>/', AuctionDetailView.as_view(), name='auction-detail'),
+    path('cuadro-tokens/', CuadroTokenListView.as_view(), name='cuadro-token-list'),
 ]

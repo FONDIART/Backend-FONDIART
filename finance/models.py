@@ -1,5 +1,16 @@
 from django.db import models
 from django.conf import settings
+from blockchain.models import CuadroToken
+
+class TokenHolding(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='token_holdings')
+    token = models.ForeignKey(CuadroToken, on_delete=models.CASCADE, related_name='holdings')
+    quantity = models.PositiveIntegerField()
+    purchase_price = models.DecimalField(max_digits=10, decimal_places=2)
+    purchase_date = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.user.username} holds {self.quantity} of {self.token.token_symbol}"
 
 class CuentaComitente(models.Model):
     user = models.OneToOneField(
@@ -22,6 +33,9 @@ class Transaccion(models.Model):
         VENTA = 'VENTA', 'Venta de Tokens'
         DEPOSITO = 'DEPOSITO', 'Depósito de Pesos'
         RETIRO = 'RETIRO', 'Retiro de Pesos'
+        DONACION_ENVIADA = 'DONACION_ENVIADA', 'Donación Enviada'
+        DONACION_RECIBIDA = 'DONACION_RECIBIDA', 'Donación Recibida'
+        FINANCIACION_PROYECTO = 'FINANCIACION_PROYECTO', 'Financiación de Proyecto'
 
     cuenta = models.ForeignKey(
         CuentaComitente,
@@ -29,7 +43,7 @@ class Transaccion(models.Model):
         related_name='transacciones'
     )
     tipo = models.CharField(
-        max_length=10,
+        max_length=25,
         choices=TipoTransaccion.choices
     )
     # Assuming 'Artwork' is the model for the tokenized asset

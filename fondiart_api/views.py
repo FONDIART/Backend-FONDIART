@@ -13,7 +13,7 @@ import cloudinary.uploader
 from django.shortcuts import get_object_or_404
 import subprocess
 
-from .models import User, Artwork, Order, Favorite, Wallet, BankAccount, Auction
+from .models import User, Artwork, Order, Favorite, Wallet, BankAccount, Auction, Project
 from .serializers import (
     UserRegistrationSerializer,
     UserLoginSerializer,
@@ -34,7 +34,65 @@ from .serializers import (
     BankAccountSerializer,
     AuctionCreateSerializer,
     AuctionSerializer,
+    ArtistSerializer,
+    ProjectSerializer,
+    ProjectCreateUpdateSerializer,
 )
+
+class ProjectListView(generics.ListCreateAPIView):
+    queryset = Project.objects.all()
+
+    def get_serializer_class(self):
+        if self.request.method == 'POST':
+            return ProjectCreateUpdateSerializer
+        return ProjectSerializer
+
+    def get_permissions(self):
+        if self.request.method == 'POST':
+            return [IsAuthenticated()]
+        return [AllowAny()]
+
+    def create(self, request, *args, **kwargs):
+        print("--- INCOMING PROJECT PAYLOAD ---")
+        print(request.data)
+        print("------------------------------")
+        return super().create(request, *args, **kwargs)
+
+    def perform_create(self, serializer):
+        serializer.save(artist=self.request.user)
+
+class ProjectDetailView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = Project.objects.all()
+    permission_classes = (IsAuthenticated,)
+    lookup_field = 'pk'
+
+    def get_serializer_class(self):
+        if self.request.method in ['PUT', 'PATCH']:
+            return ProjectCreateUpdateSerializer
+        return ProjectSerializer
+
+    def get_queryset(self):
+        user = self.request.user
+        if self.request.method in ['GET']:
+            return self.queryset.all()
+        
+        if user.role == 'admin':
+            return self.queryset.all()
+        
+        return self.queryset.filter(artist=user)
+
+class ArtistProjectListView(generics.ListAPIView):
+    serializer_class = ProjectSerializer
+    permission_classes = (AllowAny,)
+
+    def get_queryset(self):
+        artist_id = self.kwargs['artist_id']
+        return Project.objects.filter(artist_id=artist_id)
+
+class ArtistListView(generics.ListAPIView):
+    queryset = User.objects.filter(role='artist')
+    serializer_class = ArtistSerializer
+    permission_classes = (AllowAny,)
 
 # Auth Views
 class RegisterView(generics.CreateAPIView):

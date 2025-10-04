@@ -47,6 +47,18 @@ class User(AbstractUser):
             raise ValueError('Superuser must have is_superuser=True.')
         return self.create_user(username, email, password, **extra_fields)
 
+class Project(models.Model):
+    title = models.CharField(max_length=255)
+    description = models.TextField()
+    image = models.ImageField(upload_to='projects/', blank=True, null=True)
+    funding_goal = models.DecimalField(max_digits=12, decimal_places=2)
+    artist = models.ForeignKey(User, on_delete=models.CASCADE, related_name='projects')
+    publication_date = models.DateTimeField(auto_now_add=True)
+    amount_raised = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    def __str__(self):
+        return f"'{self.title}' by {self.artist.name}"
+
 # Artwork Model
 class Artwork(models.Model):
     STATUS_CHOICES = (

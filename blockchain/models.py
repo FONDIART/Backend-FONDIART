@@ -7,6 +7,8 @@ class CuadroToken(models.Model):
     token_name = models.CharField(max_length=255)
     token_symbol = models.CharField(max_length=10)
     total_supply = models.PositiveIntegerField()
+    tokens_disponibles = models.PositiveIntegerField(default=30000)
+    tokens_vendidos = models.PositiveIntegerField(default=70000)
     deployment_date = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

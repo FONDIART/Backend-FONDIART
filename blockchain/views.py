@@ -7,7 +7,12 @@ from rest_framework.permissions import IsAuthenticated
 from fondiart_api.permissions import IsAdminRoleUser
 from .models import CuadroToken
 from .cuadro_token_service import deploy_and_tokenize, transfer_tokens
-from .serializers import CuadroTokenSerializer, TransferTokensSerializer
+from .serializers import CuadroTokenSerializer, TransferTokensSerializer, CuadroTokenDetailSerializer
+
+class CuadroTokenListView(generics.ListAPIView):
+    queryset = CuadroToken.objects.all()
+    serializer_class = CuadroTokenDetailSerializer
+    permission_classes = []
 
 class TokenizeArtworkView(generics.GenericAPIView):
     permission_classes = [IsAdminRoleUser]
@@ -54,14 +59,14 @@ class TokenizeArtworkView(generics.GenericAPIView):
             artwork.save()
             print(f"[DEBUG] Saved contract address to Artwork ID: {artwork.id}")
 
+            # Usar update_or_create para manejar atómicamente la creación/actualización del token
             token_defaults = {
                 'contract_address': contract_address,
                 'token_name': f"{artwork.title} Token",
                 'token_symbol': f"ART{artwork.id}",
-                'total_supply': artwork.fractionsTotal,
+                'total_supply': 100000,
             }
             
-            print(f"[DEBUG] Attempting update_or_create for Artwork ID: {artwork.id} with defaults: {token_defaults}")
             token_instance, created = CuadroToken.objects.update_or_create(
                 artwork=artwork,
                 defaults=token_defaults

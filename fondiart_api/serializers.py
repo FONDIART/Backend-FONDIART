@@ -1,6 +1,20 @@
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
-from .models import User, Artwork, Order, Favorite, Wallet, BankAccount, Auction, Bid
+from .models import User, Artwork, Order, Favorite, Wallet, BankAccount, Auction, Bid, Project
+
+class ProjectSerializer(serializers.ModelSerializer):
+    artist_name = serializers.CharField(source='artist.name', read_only=True)
+
+    class Meta:
+        model = Project
+        fields = '__all__'
+
+class ProjectCreateUpdateSerializer(serializers.ModelSerializer):
+    image = serializers.CharField(required=False, allow_blank=True)
+
+    class Meta:
+        model = Project
+        fields = ['title', 'description', 'image', 'funding_goal']
 
 # Auth Serializers
 class UserRegistrationSerializer(serializers.ModelSerializer):
@@ -39,13 +53,30 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['id', 'name', 'email', 'role', 'avatarUrl', 'createdAt', 'dni', 'phone', 'bio', 'cbu']
+        fields = ['id', 'name', 'email', 'role', 'avatarUrl', 'createdAt']
         read_only_fields = ['id', 'email', 'role']
 
 class UserUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['name', 'avatarUrl', 'dni', 'phone', 'bio', 'cbu']
+
+class ArtworkImageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Artwork
+        fields = ['image']
+
+class ArtistSerializer(serializers.ModelSerializer):
+    artworks = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = ['id', 'name', 'avatarUrl', 'artworks']
+
+    def get_artworks(self, obj):
+        # Get the first 3 artworks for the artist
+        artworks = Artwork.objects.filter(artist=obj)[:3]
+        return ArtworkImageSerializer(artworks, many=True).data
 
 # Artwork Serializers
 class RatingSerializer(serializers.Serializer):
