@@ -1,10 +1,20 @@
 const hre = require("hardhat");
 
 async function main() {
-  const [nombreCuadro, autor, anioCreacion, artistaAddress, plataformaAddress, totalTokens, tokenSymbol] = process.argv.slice(2);
+  // Leer parámetros desde variables de entorno
+  const {
+    NOMBRE_CUADRO,
+    AUTOR,
+    ANIO_CREACION,
+    ARTISTA_ADDRESS,
+    PLATAFORMA_ADDRESS,
+    TOTAL_TOKENS,
+    TOKEN_SYMBOL
+  } = process.env;
 
-  if (!nombreCuadro || !autor || !anioCreacion || !artistaAddress || !plataformaAddress || !totalTokens || !tokenSymbol) {
-    console.error("Usage: node scripts/deploy_cuadro_token.cjs <nombreCuadro> <autor> <anioCreacion> <artistaAddress> <plataformaAddress> <totalTokens> <tokenSymbol>");
+  if (!NOMBRE_CUADRO || !AUTOR || !ANIO_CREACION || !ARTISTA_ADDRESS || !PLATAFORMA_ADDRESS || !TOTAL_TOKENS || !TOKEN_SYMBOL) {
+    console.error("Error: Missing one or more required environment variables.");
+    console.error("Required: NOMBRE_CUADRO, AUTOR, ANIO_CREACION, ARTISTA_ADDRESS, PLATAFORMA_ADDRESS, TOTAL_TOKENS, TOKEN_SYMBOL");
     process.exit(1);
   }
 
@@ -12,13 +22,13 @@ async function main() {
   
   // Desplegamos el contrato con los datos del cuadro
   const cuadroToken = await CuadroToken.deploy(
-    nombreCuadro,
-    autor,
-    anioCreacion,
-    artistaAddress,
-    plataformaAddress,
-    parseInt(totalTokens),
-    tokenSymbol
+    NOMBRE_CUADRO,
+    AUTOR,
+    ANIO_CREACION,
+    ARTISTA_ADDRESS,
+    PLATAFORMA_ADDRESS,
+    parseInt(TOTAL_TOKENS),
+    TOKEN_SYMBOL
   );
 
   await cuadroToken.waitForDeployment();

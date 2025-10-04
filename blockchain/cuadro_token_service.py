@@ -1,26 +1,43 @@
 import subprocess
 import os
 from django.conf import settings
+from fondiart_api.models import User, Wallet, Artwork
+
+import subprocess
+import os
+import re
+from django.conf import settings
+from fondiart_api.models import User, Wallet, Artwork
 
 def deploy_and_tokenize(artwork, admin_wallet_address):
     """
-    Executes the simplified hardhat script to deploy a new CuadroToken contract.
-    The contract now has hardcoded values for testing purposes.
-    
-    Args:
-        artwork (Artwork): The artwork instance to tokenize (still required for context).
-        admin_wallet_address (str): The wallet address of the admin user (no longer passed to the script).
-
-    Returns:
-        str: The address of the deployed smart contract.
-        
-    Raises:
-        subprocess.CalledProcessError: If the script execution fails.
-        Exception: If the contract address cannot be found in the script's output.
+    Executes the hardhat script to deploy a new CuadroToken contract.
     """
+    try:
+        artist_wallet = Wallet.objects.get(user_id=artwork.artist.id)
+    except Wallet.DoesNotExist:
+        raise Exception(f"Wallet for artist {artwork.artist.name} not found.")
+
+    autor = artwork.artist.name
     
-    # --- Script Arguments ---
-    # The script is now simplified and does not require arguments.
+    artist_name_parts = autor.split()
+    if len(artist_name_parts) > 1:
+        symbol_base = artist_name_parts[-1][0] + artist_name_parts[0][0]
+    else:
+        symbol_base = autor[0:2] if len(autor) > 1 else autor + "X"
+    
+    artwork_count = Artwork.objects.filter(artist=artwork.artist).count()
+    token_symbol = f"{symbol_base.upper()}{artwork_count}"
+
+    script_env = os.environ.copy()
+    script_env["NOMBRE_CUADRO"] = artwork.title
+    script_env["AUTOR"] = autor
+    script_env["ANIO_CREACION"] = str(artwork.createdAt.year)
+    script_env["ARTISTA_ADDRESS"] = artist_wallet.address
+    script_env["PLATAFORMA_ADDRESS"] = admin_wallet_address
+    script_env["TOTAL_TOKENS"] = str(artwork.fractionsTotal)
+    script_env["TOKEN_SYMBOL"] = token_symbol
+
     args = [
         "npx",
         "hardhat",
@@ -30,24 +47,51 @@ def deploy_and_tokenize(artwork, admin_wallet_address):
         "sepolia"
     ]
 
-    # Execute the script
     process = subprocess.run(
         args,
         capture_output=True,
         text=True,
         cwd=settings.BASE_DIR,
-        check=True  # Raises CalledProcessError on non-zero exit codes
+        check=True,
+        env=script_env
     )
 
-    # The script is designed to print ONLY the contract address to stdout.
-    contract_address = process.stdout.strip()
-    
-    # A simple validation to ensure we got something that looks like an address
-    if not contract_address.startswith("0x") or len(contract_address) != 42:
-        raise Exception(
-            "Script executed, but the output was not a valid contract address.\n"
-            f"Stdout: {process.stdout}\n"
-            f"Stderr: {process.stderr}"
-        )
+    # Buscar la dirección del contrato en la salida del script
+    match = re.search(r"(0x[a-fA-F0-9]{40})", process.stdout)
+    if not match:
+        raise Exception(f"Could not find contract address in script output.\nStdout: {process.stdout}\nStderr: {process.stderr}")
 
+    contract_address = match.group(1)
     return contract_address
+
+def transfer_tokens(contract_address, to_address, amount):
+    """
+    Executes the hardhat script to transfer tokens from the contract's holdings.
+    """
+    script_env = os.environ.copy()
+    script_env["CONTRACT_ADDRESS"] = contract_address
+    script_env["TO_ADDRESS"] = to_address
+    amount_in_wei = str(amount * (10**18))
+    script_env["AMOUNT"] = amount_in_wei
+
+    args = [
+        "npx",
+        "hardhat",
+        "run",
+        "scripts/transfer_tokens.cjs",
+        "--network",
+        "sepolia"
+    ]
+
+    process = subprocess.run(
+        args,
+        capture_output=True,
+        text=True,
+        cwd=settings.BASE_DIR,
+        check=True,
+        env=script_env
+    )
+
+    return process.stdout
+
+
