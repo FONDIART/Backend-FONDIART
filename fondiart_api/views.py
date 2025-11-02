@@ -1,4 +1,4 @@
-from django.db.models import Q
+from django.db.models import Q, Case, When, Value, CharField
 from rest_framework import generics, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -13,14 +13,20 @@ import cloudinary.uploader
 from django.shortcuts import get_object_or_404
 import subprocess
 
-from .models import User, Artwork, Order, Favorite, Wallet, BankAccount, Auction, Project
+from .models import User, Artwork, Order, Favorite, Wallet, BankAccount, Auction, Project, ArtistPerformance
+from finance.models import TokenHolding, CuentaComitente, SellOrder, SellOrder
+from blockchain.models import CuadroToken
+from django.db.models import Q, Avg
+import random
 from .serializers import (
     UserRegistrationSerializer,
     UserLoginSerializer,
     AuthResponseSerializer,
     UserSerializer,
     UserUpdateSerializer,
+    UserDetailSerializer,
     ArtworkListItemSerializer,
+    ArtworkDetailSerializer,
     ArtworkDetailSerializer,
     ArtworkCreateSerializer,
     ArtworkUpdateSerializer,
@@ -29,15 +35,24 @@ from .serializers import (
     OrderSerializer,
     FavoriteResponseSerializer,
     ArtworkStatsSerializer,
+    ArtworkStatsResponseSerializer,
     WalletSerializer,
+    UserWalletSerializer,
     WalletAddressSerializer,
     BankAccountSerializer,
     AuctionCreateSerializer,
+    AuctionUpdateSerializer,
     AuctionSerializer,
     ArtistSerializer,
     ProjectSerializer,
     ProjectCreateUpdateSerializer,
+    GenerateArtworkNFTSerializer
 )
+import subprocess
+import os
+import json
+from django.conf import settings
+from django.db import transaction
 
 class ProjectListView(generics.ListCreateAPIView):
     queryset = Project.objects.all()
@@ -119,6 +134,9 @@ class RegisterView(generics.CreateAPIView):
             private_key=wallet_data['private_key']
         )
 
+        # Create CuentaComitente
+        CuentaComitente.objects.create(user=user)
+
         refresh = RefreshToken.for_user(user)
         response_data = {
             'token': str(refresh.access_token),
@@ -159,9 +177,31 @@ class MeView(generics.RetrieveAPIView):
         return self.request.user
 
 # User Views
+class PublicUserListView(generics.ListAPIView):
+    queryset = User.objects.exclude(role='admin')
+    serializer_class = UserSerializer
+    permission_classes = (AllowAny,)
+
+
 class UserWalletAddressView(generics.RetrieveAPIView):
     queryset = Wallet.objects.all()
     serializer_class = WalletAddressSerializer
+    permission_classes = (IsAuthenticated,)
+    lookup_field = 'user_id'
+
+    def get_object(self):
+        user_id = self.kwargs.get('user_id')
+        try:
+            # Retrieve the wallet for the specified user ID
+            return Wallet.objects.get(user_id=user_id)
+        except Wallet.DoesNotExist:
+            # You might want to handle this case, e.g., by raising a 404 error
+            from django.http import Http404
+            raise Http404
+
+class UserWalletView(generics.RetrieveAPIView):
+    queryset = Wallet.objects.all()
+    serializer_class = UserWalletSerializer
     permission_classes = (IsAuthenticated,)
     lookup_field = 'user_id'
 
@@ -213,9 +253,10 @@ class NonDirectSaleArtworkListView(generics.ListAPIView):
 
 # Artwork Views
 class ArtworkListView(generics.ListAPIView):
-    queryset = Artwork.objects.filter(venta_directa=False)
+    queryset = Artwork.objects.all() # Return all artworks, both tokenized and direct sale
     serializer_class = ArtworkListItemSerializer
-    permission_classes = (AllowAny,) # Public access
+    permission_classes = (AllowAny,)
+    pagination_class = None # Disable pagination for this endpoint
 
     # Implement filtering and sorting based on OpenAPI parameters
     def get_queryset(self):
@@ -366,17 +407,8 @@ class ArtworkStatsView(APIView):
             if artwork.artist != request.user and not request.user.role == 'admin':
                 return Response({'error': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
             
-            # Placeholder for actual stats calculation
-            stats = {
-                'artworkId': str(artwork.id),
-                'soldFractions': artwork.fractionsTotal - artwork.fractionsLeft,
-                'fractionsTotal': artwork.fractionsTotal,
-                'soldPct': (artwork.fractionsTotal - artwork.fractionsLeft) / artwork.fractionsTotal * 100 if artwork.fractionsTotal > 0 else 0,
-                'revenue': (artwork.fractionsTotal - artwork.fractionsLeft) * artwork.price,
-                'timeline': [], # Placeholder
-                'buyersTop': [], # Placeholder
-            }
-            return Response(stats) 
+            serializer = ArtworkStatsResponseSerializer(artwork)
+            return Response(serializer.data)
         except Artwork.DoesNotExist:
             return Response({'error': 'Artwork not found'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -612,12 +644,276 @@ class ArtworkTokenizeView(APIView):
             return Response({"error": "Node.js or deployment script not found"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class AuctionListView(generics.ListAPIView):
-    queryset = Auction.objects.all()
     serializer_class = AuctionSerializer
     permission_classes = (AllowAny,)
+
+    def get_queryset(self):
+        print("--- [DEBUG] AuctionListView: get_queryset ---")
+        now = timezone.now()
+        today = now.date()
+
+        finished_auctions = Auction.objects.filter(status__in=['upcoming', 'active'], auction_date__date__lt=today)
+        print(f"[DEBUG] Found {len(finished_auctions)} finished auctions.")
+
+        artwork_ids_to_update = [auction.artwork.id for auction in finished_auctions]
+        if artwork_ids_to_update:
+            print(f"[DEBUG] Updating artworks with IDs: {artwork_ids_to_update}\n")
+            Artwork.objects.filter(id__in=artwork_ids_to_update).update(estado_venta='vendida')
+            finished_auctions.update(status='finished')
+
+            # Close associated open sell orders
+            SellOrder.objects.filter(token__artwork__id__in=artwork_ids_to_update, status='abierta').update(status='cerrada')
+            print(f"[DEBUG] Closed open sell orders for artworks with IDs: {artwork_ids_to_update}\n")
+
+        Auction.objects.filter(status__in=['upcoming', 'active'], auction_date__date=today).update(status='active')
+
+        return Auction.objects.all()
 
 class AuctionDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Auction.objects.all()
     serializer_class = AuctionSerializer
     permission_classes = (IsAdminRoleUser,)
     lookup_field = 'pk'
+
+    def get_serializer_class(self):
+        if self.request.method in ['PUT', 'PATCH']:
+            return AuctionUpdateSerializer
+        return AuctionSerializer
+
+    def get_object(self):
+        print("--- [DEBUG] AuctionDetailView: get_object ---")
+        obj = super().get_object()
+        now = timezone.now()
+        today = now.date()
+        
+        new_status = obj.status
+        if obj.status in ['upcoming', 'active']:
+            if obj.auction_date.date() < today:
+                print(f"[DEBUG] Auction {obj.id} is finished. Updating artwork {obj.artwork.id} status.")
+                new_status = 'finished'
+                obj.artwork.estado_venta = 'vendida'
+                obj.artwork.save()
+
+                # Close associated open sell orders
+                SellOrder.objects.filter(token__artwork=obj.artwork, status='abierta').update(status='cerrada')
+                print(f"[DEBUG] Closed open sell orders for artwork {obj.artwork.id}.\n")
+            elif obj.auction_date.date() == today:
+                new_status = 'active'
+            else:
+                new_status = 'upcoming'
+
+        if new_status != obj.status:
+            obj.status = new_status
+            obj.save()
+            
+        return obj
+
+class ArtworkAuctionDetailView(APIView):
+    permission_classes = [AllowAny] # Or IsAuthenticated, depending on your requirements
+
+    def get(self, request, artwork_id):
+        artwork = get_object_or_404(Artwork, pk=artwork_id)
+        if hasattr(artwork, 'auction'):
+            return Response({'auction_id': artwork.auction.id}, status=status.HTTP_200_OK)
+        else:
+            return Response({'error': 'No auction found for this artwork'}, status=status.HTTP_404_NOT_FOUND)
+
+class AuctionDeleteView(generics.DestroyAPIView):
+    queryset = Auction.objects.all()
+    permission_classes = [IsAdminRoleUser]
+    lookup_field = 'pk'
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        artwork = instance.artwork
+        artist = artwork.artist
+        admin_user = User.objects.filter(role='admin').first()
+
+        if admin_user:
+            try:
+                cuadro_token = CuadroToken.objects.get(artwork=artwork)
+                TokenHolding.objects.filter(token=cuadro_token, user=artist).delete()
+                TokenHolding.objects.filter(token=cuadro_token, user=admin_user).delete()
+                cuadro_token.delete()
+            except CuadroToken.DoesNotExist:
+                # Handle case where token does not exist
+                pass
+
+        return super().destroy(request, *args, **kwargs)
+
+class CheckCBUView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        user_id = kwargs.get('user_id')
+        try:
+            user = User.objects.get(pk=user_id)
+            has_cbu = bool(user.cbu)
+            return Response({'has_cbu': has_cbu})
+        except User.DoesNotExist:
+            return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+class UserDetailView(generics.RetrieveAPIView):
+    queryset = User.objects.all()
+    serializer_class = UserDetailSerializer
+    permission_classes = [IsAuthenticated]
+    lookup_field = 'pk'
+
+class RecommendedArtworksView(generics.ListAPIView):
+    serializer_class = ArtworkListItemSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        # 1. Find the top cluster
+        try:
+            latest_performance_date = ArtistPerformance.objects.latest('date').date
+            cluster_performance = ArtistPerformance.objects.filter(date=latest_performance_date)\
+                .values('cluster')\
+                .annotate(avg_revenue=Avg('total_sales_revenue'))\
+                .order_by('-avg_revenue')
+        except ArtistPerformance.DoesNotExist:
+            return Artwork.objects.none()
+        
+        if not cluster_performance:
+            return Artwork.objects.none()
+
+        top_cluster_id = cluster_performance[0]['cluster']
+
+        # 2. Get top artists
+        top_artists = ArtistPerformance.objects.filter(date=latest_performance_date, cluster=top_cluster_id).values_list('artist', flat=True)
+
+        # 3. Find available artworks from these artists
+        artworks_from_top_artists = Artwork.objects.filter(artist__in=top_artists)
+
+        # Artworks with available tokens in primary market
+        primary_market_artworks = artworks_from_top_artists.filter(cuadro_token__tokens_disponibles__gt=0)
+
+        # Artworks with open sell orders in secondary market
+        secondary_market_artworks_ids = SellOrder.objects.filter(status='abierta', token__artwork__artist__in=top_artists).values_list('token__artwork_id', flat=True)
+        secondary_market_artworks = artworks_from_top_artists.filter(id__in=secondary_market_artworks_ids)
+
+        # Combine and get unique artworks
+        available_artworks = (primary_market_artworks | secondary_market_artworks).distinct()
+
+        # 4. Return 10 random artworks
+        all_ids = list(available_artworks.values_list('id', flat=True))
+        random_ids = random.sample(all_ids, min(len(all_ids), 10))
+        
+        return Artwork.objects.filter(id__in=random_ids)
+
+class GenerateArtworkNFTView(APIView):
+    permission_classes = [IsAdminRoleUser] # Only admin can generate NFTs
+    serializer_class = GenerateArtworkNFTSerializer
+
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        user_id = serializer.validated_data['user_id']
+        artwork_id = serializer.validated_data['artwork_id']
+        auction_id = serializer.validated_data['auction_id']
+
+        try:
+            buyer = User.objects.get(pk=user_id)
+            artwork = Artwork.objects.get(pk=artwork_id)
+            auction = Auction.objects.get(pk=auction_id)
+            admin_user = User.objects.filter(role='admin').first()
+            
+            if not admin_user:
+                return Response({'error': 'Admin user not found.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+            buyer_wallet = Wallet.objects.get(user=buyer)
+            admin_wallet = Wallet.objects.get(user=admin_user)
+
+        except (User.DoesNotExist, Artwork.DoesNotExist, Auction.DoesNotExist, Wallet.DoesNotExist) as e:
+            return Response({'error': str(e)}, status=status.HTTP_404_NOT_FOUND)
+
+        # 1. Deploy NFT contract if not already deployed
+        # This is a simplified approach. In a real app, you'd store the contract address
+        # in a database model or settings after the first deployment.
+        nft_contract_address = getattr(settings, 'ARTWORK_NFT_CONTRACT_ADDRESS', None)
+        
+        if not nft_contract_address:
+            # Use self.stdout.write for management commands, not views
+            print("Artwork NFT contract not deployed. Deploying now...")
+            try:
+                result = subprocess.run(
+                    ["node", "scripts/deploy_artwork_nft.cjs"],
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                    cwd=settings.BASE_DIR / "backend-Fondiart"
+                )
+                nft_contract_address = result.stdout.strip()
+                # Save this address to settings or a model for future use
+                # For now, just use it.
+                print(f"Artwork NFT contract deployed to: {nft_contract_address}")
+            except subprocess.CalledProcessError as e:
+                return Response({"error": "Failed to deploy NFT contract", "details": e.stderr}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            except FileNotFoundError:
+                return Response({"error": "Node.js or deployment script not found"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        # 2. Prepare NFT Metadata
+        # This metadata would typically be stored on IPFS and the tokenURI would be the IPFS hash.
+        # For simplicity, we'll just pass a JSON string directly for now.
+        nft_metadata = {
+            "name": f"Certificate of Ownership for {artwork.title}",
+            "description": f"This NFT certifies ownership of the artwork '{artwork.title}' by {artwork.artist.name}.",
+            "image": artwork.image.url if artwork.image else "",
+            "attributes": [
+                {"trait_type": "Artwork Name", "value": artwork.title},
+                {"trait_type": "Artist Name", "value": artwork.artist.name},
+                {"trait_type": "Auction ID", "value": str(auction.id)},
+                {"trait_type": "Auction Date", "value": str(auction.auction_date)},
+                {"trait_type": "Cost Amount", "value": str(auction.final_price)},
+                {"trait_type": "Buyer Name", "value": buyer.name},
+                {"trait_type": "Buyer DNI", "value": buyer.dni},
+            ]
+        }
+        token_uri = json.dumps(nft_metadata) # In a real app, this would be an IPFS URI
+
+        # 3. Mint and Transfer NFT
+        admin_private_key = settings.ADMIN_WALLET_PRIVATE_KEY # Ensure this is securely stored
+        if not admin_private_key:
+            return Response({'error': 'Admin private key not configured.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        try:
+            result = subprocess.run(
+                [
+                    "node", "scripts/mint_and_transfer_artwork_nft.cjs",
+                    nft_contract_address,
+                    admin_private_key,
+                    buyer_wallet.address,
+                    token_uri
+                ],
+                capture_output=True,
+                text=True,
+                check=True,
+                cwd=settings.BASE_DIR / "backend-Fondiart"
+            )
+            print(f"NFT operation successful: {result.stdout}")
+            # You might want to store the NFT ID and transaction hash in your database
+            return Response({'message': 'NFT generated and transferred successfully.', 'details': result.stdout}, status=status.HTTP_200_OK)
+
+        except subprocess.CalledProcessError as e:
+            return Response({"error": "Failed to mint or transfer NFT", "details": e.stderr}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except FileNotFoundError:
+            return Response({"error": "Node.js or NFT script not found"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class MarkArtworkAsSoldView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk, *args, **kwargs):
+        try:
+            artwork = Artwork.objects.get(pk=pk)
+        except Artwork.DoesNotExist:
+            return Response({'error': 'Artwork not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if artwork.estado_venta == 'vendida':
+            return Response({'message': 'Artwork is already marked as sold.'}, status=status.HTTP_200_OK)
+
+        artwork.estado_venta = 'vendida'
+        artwork.save()
+
+        serializer = ArtworkDetailSerializer(artwork) # Use a detail serializer for the response
+        return Response(serializer.data, status=status.HTTP_200_OK)

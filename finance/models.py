@@ -36,6 +36,7 @@ class Transaccion(models.Model):
         DONACION_ENVIADA = 'DONACION_ENVIADA', 'Donación Enviada'
         DONACION_RECIBIDA = 'DONACION_RECIBIDA', 'Donación Recibida'
         FINANCIACION_PROYECTO = 'FINANCIACION_PROYECTO', 'Financiación de Proyecto'
+        FINANCIACION_RECIBIDA = 'FINANCIACION_RECIBIDA', 'Financiación Recibida'
 
     cuenta = models.ForeignKey(
         CuentaComitente,
@@ -76,6 +77,33 @@ class Transaccion(models.Model):
         choices=EstadoTransaccion.choices,
         default=EstadoTransaccion.PENDIENTE
     )
+    recipient_artist = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='received_donations')
 
     def __str__(self):
         return f"{self.tipo} - {self.cuenta.user.username} - {self.monto_pesos}"
+
+class Donation(models.Model):
+    project = models.ForeignKey('fondiart_api.Project', on_delete=models.CASCADE, related_name='donations')
+    donor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='donations')
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Donation of {self.amount} to {self.project.title} by {self.donor.username}"
+
+class SellOrder(models.Model):
+    STATUS_CHOICES = (
+        ('abierta', 'Abierta'),
+        ('cerrada', 'Cerrada'),
+        ('cancelada', 'Cancelada'),
+    )
+
+    token = models.ForeignKey(CuadroToken, on_delete=models.CASCADE, related_name='sell_orders')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='sell_orders')
+    quantity = models.PositiveIntegerField()
+    price = models.DecimalField(max_digits=10, decimal_places=2)
+    publication_date = models.DateTimeField(auto_now_add=True)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='abierta')
+
+    def __str__(self):
+        return f"Sell order for {self.quantity} of {self.token.token_symbol} by {self.user.username}"

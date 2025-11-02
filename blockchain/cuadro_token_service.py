@@ -30,6 +30,8 @@ def deploy_and_tokenize(artwork, admin_wallet_address):
     token_symbol = f"{symbol_base.upper()}{artwork_count}"
 
     script_env = os.environ.copy()
+    node_path = "/Users/jorgeantoniosegovia/.nvm/versions/node/v24.4.0/bin"
+    script_env["PATH"] = node_path + os.pathsep + script_env.get("PATH", "")
     script_env["NOMBRE_CUADRO"] = artwork.title
     script_env["AUTOR"] = autor
     script_env["ANIO_CREACION"] = str(artwork.createdAt.year)
@@ -39,7 +41,7 @@ def deploy_and_tokenize(artwork, admin_wallet_address):
     script_env["TOKEN_SYMBOL"] = token_symbol
 
     args = [
-        "npx",
+        "/Users/jorgeantoniosegovia/.nvm/versions/node/v24.4.0/bin/npx",
         "hardhat",
         "run",
         "scripts/deploy_cuadro_token.cjs",
@@ -69,13 +71,15 @@ def transfer_tokens(contract_address, to_address, amount):
     Executes the hardhat script to transfer tokens from the contract's holdings.
     """
     script_env = os.environ.copy()
+    node_path = "/Users/jorgeantoniosegovia/.nvm/versions/node/v24.4.0/bin"
+    script_env["PATH"] = node_path + os.pathsep + script_env.get("PATH", "")
     script_env["CONTRACT_ADDRESS"] = contract_address
     script_env["TO_ADDRESS"] = to_address
     amount_in_wei = str(amount * (10**18))
     script_env["AMOUNT"] = amount_in_wei
 
     args = [
-        "npx",
+        "/Users/jorgeantoniosegovia/.nvm/versions/node/v24.4.0/bin/npx",
         "hardhat",
         "run",
         "scripts/transfer_tokens.cjs",

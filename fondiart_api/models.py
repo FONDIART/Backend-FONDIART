@@ -55,6 +55,7 @@ class Project(models.Model):
     artist = models.ForeignKey(User, on_delete=models.CASCADE, related_name='projects')
     publication_date = models.DateTimeField(auto_now_add=True)
     amount_raised = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    funds_disbursed = models.BooleanField(default=False)
 
     def __str__(self):
         return f"'{self.title}' by {self.artist.name}"
@@ -77,7 +78,7 @@ class Artwork(models.Model):
     description = models.TextField(blank=True, null=True)
     artist = models.ForeignKey(User, on_delete=models.CASCADE, related_name='artworks')
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='pending')
-    price = models.DecimalField(max_digits=10, decimal_places=2)
+    price = models.DecimalField(max_digits=10, decimal_places=2, default=0.0, null=True, blank=True)
     fractionFrom = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     fractionsTotal = models.IntegerField(null=True, blank=True)
     fractionsLeft = models.IntegerField(null=True, blank=True)
@@ -93,6 +94,8 @@ class Artwork(models.Model):
     image = models.ImageField(upload_to='artworks/', blank=True, null=True)
     gallery = models.JSONField(default=list, blank=True, null=True)
     contract_address = models.CharField(max_length=42, blank=True, null=True)
+    medidas = models.CharField(max_length=255, blank=True, null=True)
+    soporte = models.CharField(max_length=255, blank=True, null=True)
 
     def __str__(self):
         return self.title
@@ -160,8 +163,7 @@ class Auction(models.Model):
     )
     artwork = models.OneToOneField(Artwork, on_delete=models.CASCADE, related_name='auction')
     start_price = models.DecimalField(max_digits=10, decimal_places=2)
-    start_date = models.DateTimeField()
-    end_date = models.DateTimeField()
+    auction_date = models.DateTimeField()
     buyer = models.ForeignKey(User, on_delete=models.SET_NULL, related_name='won_auctions', null=True, blank=True)
     final_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='upcoming')
@@ -182,3 +184,18 @@ class Bid(models.Model):
 
     def __str__(self):
         return f"Bid of {self.amount} by {self.bidder.email} for {self.auction.artwork.title}"
+
+class ArtistPerformance(models.Model):
+    artist = models.ForeignKey(User, on_delete=models.CASCADE, related_name='performance_records')
+    date = models.DateField(auto_now_add=True)
+    total_sales_volume = models.PositiveIntegerField(default=0)
+    total_sales_revenue = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    average_sale_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    number_of_artworks_sold = models.PositiveIntegerField(default=0)
+    cluster = models.IntegerField(null=True, blank=True)
+
+    class Meta:
+        unique_together = ('artist', 'date')
+
+    def __str__(self):
+        return f"Performance for {self.artist.name} on {self.date}"

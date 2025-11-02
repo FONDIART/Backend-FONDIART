@@ -116,11 +116,16 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
+USE_TZ = True
+
+# 2. Definir la zona horaria (UTC-3)
+# Se recomienda usar el nombre IANA más representativo para GMT-3.
+
+# Opción A (Buenos Aires, Argentina):
+TIME_ZONE = 'America/Argentina/Buenos_Aires'
 
 USE_I18N = True
 
-USE_TZ = True
 
 
 # Static files (CSS, JavaScript, Images)

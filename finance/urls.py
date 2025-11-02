@@ -7,7 +7,21 @@ from .views import (
     BuyTokensView,
     UserTokenHoldingsView,
     DonationView,
-    FundProjectView
+    FundProjectView,
+    ProjectDonationView,
+    ProjectDonationSummaryView,
+    ProjectDonorsCountView,
+    CheckSufficientFundsView,
+    TransferToAdminView,
+    LiquidateArtworkView,
+    WithdrawToCBUView,
+    UserTransactionHistoryView,
+    SellOrderListCreateView,
+    SellOrderDetailView,
+    UserSellOrderListView,
+    OpenSellOrderListView,
+    BuyFromSellOrderView,
+    UserDonationHistoryView
 )
 
 urlpatterns = [
@@ -19,4 +33,18 @@ urlpatterns = [
     path('users/<int:user_id>/tokens/', UserTokenHoldingsView.as_view(), name='user-token-holdings'),
     path('donations/', DonationView.as_view(), name='create-donation'),
     path('projects/fund/', FundProjectView.as_view(), name='fund-project'),
+    path('donations/project/', ProjectDonationView.as_view(), name='project-donation-create'),
+    path('projects/<int:project_id>/donations/summary/<int:user_id>/', ProjectDonationSummaryView.as_view(), name='project-donation-summary'),
+    path('projects/<int:project_id>/donors/count/', ProjectDonorsCountView.as_view(), name='project-donors-count'),
+    path('check-funds/', CheckSufficientFundsView.as_view(), name='check-funds'),
+    path('transfer-to-admin/', TransferToAdminView.as_view(), name='transfer-to-admin'),
+    path('liquidate-artwork/', LiquidateArtworkView.as_view(), name='liquidate-artwork'),
+    path('withdraw-to-cbu/', WithdrawToCBUView.as_view(), name='withdraw-to-cbu'),
+    path('users/<int:user_id>/transactions/', UserTransactionHistoryView.as_view(), name='user-transaction-history'),
+    path('sell-orders/', SellOrderListCreateView.as_view(), name='sell-order-list-create'),
+    path('sell-orders/<int:pk>/', SellOrderDetailView.as_view(), name='sell-order-detail'),
+    path('users/<int:user_id>/sell-orders/', UserSellOrderListView.as_view(), name='user-sell-orders'),
+    path('sell-orders/open/', OpenSellOrderListView.as_view(), name='open-sell-orders'),
+    path('buy-order/', BuyFromSellOrderView.as_view(), name='buy-from-sell-order'),
+    path('users/<int:user_id>/donations/', UserDonationHistoryView.as_view(), name='user-donation-history'),
 ]

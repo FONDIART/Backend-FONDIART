@@ -1,5 +1,7 @@
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
+from urllib.parse import unquote
+import cloudinary.uploader
 from .models import User, Artwork, Order, Favorite, Wallet, BankAccount, Auction, Bid, Project
 
 class ProjectSerializer(serializers.ModelSerializer):
@@ -53,13 +55,21 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['id', 'name', 'email', 'role', 'avatarUrl', 'createdAt']
+        fields = ['id', 'name', 'email', 'role', 'avatarUrl', 'createdAt', 'dni']
         read_only_fields = ['id', 'email', 'role']
 
 class UserUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['name', 'avatarUrl', 'dni', 'phone', 'bio', 'cbu']
+
+class UserDetailSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = [
+            'id', 'username', 'name', 'email', 'role', 'avatarUrl', 
+            'dni', 'phone', 'bio', 'cbu', 'date_joined'
+        ]
 
 class ArtworkImageSerializer(serializers.ModelSerializer):
     class Meta:
@@ -71,7 +81,7 @@ class ArtistSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['id', 'name', 'avatarUrl', 'artworks']
+        fields = ['id', 'name', 'avatarUrl', 'artworks', 'bio']
 
     def get_artworks(self, obj):
         # Get the first 3 artworks for the artist
@@ -92,8 +102,8 @@ class ArtworkListItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = Artwork
         fields = [
-            'id', 'title', 'artist', 'status', 'price', 'fractionFrom',
-            'fractionsTotal', 'fractionsLeft', 'tags', 'image', 'rating', 'createdAt'
+            'id', 'title', 'artist', 'status', 'price', 'fractionFrom','venta_directa',
+            'fractionsTotal', 'fractionsLeft', 'tags', 'image', 'rating', 'createdAt', 'medidas', 'soporte', 'estado_venta'
         ]
 
     def get_artist(self, obj):
@@ -109,7 +119,7 @@ class ArtworkDetailSerializer(ArtworkListItemSerializer):
     approvedAt = serializers.DateTimeField(allow_null=True)
 
     class Meta(ArtworkListItemSerializer.Meta):
-        fields = ArtworkListItemSerializer.Meta.fields + ['description', 'ownerId', 'gallery', 'approvedAt', 'contract_address']
+        fields = ArtworkListItemSerializer.Meta.fields + ['description', 'ownerId', 'gallery', 'approvedAt', 'contract_address', 'medidas', 'soporte']
 
 class ArtworkCreateSerializer(serializers.ModelSerializer):
     image = serializers.URLField(required=True)
@@ -119,7 +129,7 @@ class ArtworkCreateSerializer(serializers.ModelSerializer):
         fields = [
             'title', 'description', 'price', 'fractionFrom', 'fractionsTotal',
             'image', 'gallery', 'tags', 'status', 'fractionsLeft',
-            'venta_directa', 'estado_venta'
+            'venta_directa', 'estado_venta', 'medidas', 'soporte'
         ]
         read_only_fields = ['status']
         extra_kwargs = {
@@ -132,6 +142,8 @@ class ArtworkCreateSerializer(serializers.ModelSerializer):
             'fractionsLeft': {'required': False},
             'venta_directa': {'required': False},
             'estado_venta': {'required': False},
+            'medidas': {'required': False},
+            'soporte': {'required': False},
         }
 
     def validate(self, attrs):
@@ -148,8 +160,13 @@ class ArtworkCreateSerializer(serializers.ModelSerializer):
         return attrs
 
     def create(self, validated_data):
-        if validated_data.get('fractionsTotal') is not None and validated_data.get('fractionsLeft') is None:
-            validated_data['fractionsLeft'] = validated_data['fractionsTotal']
+        if validated_data.get('venta_directa'):
+            validated_data['fractionsTotal'] = 1
+            validated_data['fractionsLeft'] = 1
+        else:
+            validated_data['fractionsTotal'] = 100000
+            validated_data['fractionsLeft'] = 30000
+
         validated_data['status'] = 'approved' if validated_data.get('venta_directa') else 'pending'
         return super().create(validated_data)
 
@@ -158,7 +175,7 @@ class ArtworkUpdateSerializer(serializers.ModelSerializer):
         model = Artwork
         fields = [
             'title', 'description', 'price', 'fractionFrom', 'fractionsTotal',
-            'image', 'gallery', 'tags'
+            'image', 'gallery', 'tags', 'venta_directa', 'medidas', 'soporte', 'estado_venta'
         ]
         extra_kwargs = {
             'fractionFrom': {'required': False, 'allow_null': True},
@@ -200,6 +217,11 @@ class ArtworkStatsSerializer(serializers.Serializer):
     timeline = serializers.ListField(child=serializers.DictField())
     buyersTop = serializers.ListField(child=serializers.DictField())
 
+class ArtworkStatsResponseSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Artwork
+        fields = ['id', 'title', 'createdAt', 'fractionsTotal', 'fractionsLeft', 'fractionFrom', 'venta_directa', 'price', 'medidas', 'soporte']
+
 # Error Serializer
 class ErrorSerializer(serializers.Serializer):
     code = serializers.CharField()
@@ -211,6 +233,12 @@ class WalletAddressSerializer(serializers.ModelSerializer):
     class Meta:
         model = Wallet
         fields = ['address']
+
+class UserWalletSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Wallet
+        fields = ['id', 'address']
+
 
 class WalletSerializer(serializers.ModelSerializer):
     class Meta:
@@ -228,13 +256,31 @@ class BankAccountSerializer(serializers.ModelSerializer):
 class AuctionCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Auction
-        fields = ['start_price', 'start_date', 'end_date']
+        fields = ['start_price', 'auction_date']
+
+class AuctionUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Auction
+        fields = ['start_price', 'auction_date', 'status', 'buyer', 'final_price']
 
 class AuctionSerializer(serializers.ModelSerializer):
     artwork_title = serializers.CharField(source='artwork.title', read_only=True)
-    artwork_image = serializers.URLField(source='artwork.image.url', read_only=True)
+    artwork_image = serializers.SerializerMethodField()
     artist_name = serializers.CharField(source='artwork.artist.name', read_only=True)
 
     class Meta:
         model = Auction
         fields = '__all__'
+
+    def get_artwork_image(self, obj):
+        if obj.artwork and hasattr(obj.artwork, 'image') and obj.artwork.image:
+            url = unquote(obj.artwork.image.url)
+            if url.startswith('/'):
+                url = url[1:]
+            return url
+        return None
+
+class GenerateArtworkNFTSerializer(serializers.Serializer):
+    user_id = serializers.IntegerField()
+    artwork_id = serializers.IntegerField()
+    auction_id = serializers.IntegerField()

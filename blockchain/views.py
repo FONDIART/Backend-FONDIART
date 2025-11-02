@@ -8,6 +8,11 @@ from fondiart_api.permissions import IsAdminRoleUser
 from .models import CuadroToken
 from .cuadro_token_service import deploy_and_tokenize, transfer_tokens
 from .serializers import CuadroTokenSerializer, TransferTokensSerializer, CuadroTokenDetailSerializer
+import os
+from django.db import transaction
+from fondiart_api.models import User
+from finance.models import TokenHolding
+from rest_framework.views import APIView
 
 class CuadroTokenListView(generics.ListAPIView):
     queryset = CuadroToken.objects.all()
@@ -116,3 +121,37 @@ class GetContractAddressView(generics.GenericAPIView):
         artwork_id = self.kwargs.get('artwork_id')
         token = get_object_or_404(CuadroToken, artwork_id=artwork_id)
         return Response({'contract_address': token.contract_address}, status=status.HTTP_200_OK)
+
+class InitialTokenDistributionView(APIView):
+    permission_classes = [IsAdminRoleUser]
+
+    def post(self, request, *args, **kwargs):
+        artwork_id = kwargs.get('artwork_id')
+        artwork = get_object_or_404(Artwork, pk=artwork_id)
+        cuadro_token = get_object_or_404(CuadroToken, artwork=artwork)
+        
+        artist = artwork.artist
+        admin_user = User.objects.filter(role='admin').first()
+
+        if not admin_user:
+            return Response({'error': 'No admin user found.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        distributions = [
+            {'user': artist, 'amount': 60000},
+            {'user': admin_user, 'amount': 10000}
+        ]
+
+        try:
+            with transaction.atomic():
+                for dist in distributions:
+                    TokenHolding.objects.create(
+                        user=dist['user'],
+                        token=cuadro_token,
+                        quantity=dist['amount'],
+                        purchase_price=0
+                    )
+
+            return Response({"status": "success", "message": "Initial token holdings recorded successfully."}, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
