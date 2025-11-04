@@ -71,9 +71,6 @@ class ProjectDonationView(generics.CreateAPIView):
             donor_account.balance -= total_cost
             donor_account.save()
 
-            project.amount_raised += amount
-            project.save()
-
             Transaccion.objects.create(
                 cuenta=donor_account,
                 tipo=Transaccion.TipoTransaccion.DONACION_ENVIADA,

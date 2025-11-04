@@ -1,7 +1,4 @@
-import subprocess
-import os
-from django.conf import settings
-from fondiart_api.models import User, Wallet, Artwork
+
 
 import subprocess
 import os
